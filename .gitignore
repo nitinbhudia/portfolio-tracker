@@ -1,0 +1,17 @@
+# Your real data never goes to git
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+!tests/fixtures/*.csv
+*.db
+*.sqlite
+.env
+uploads/
+data/
+# tooling
+.venv/
+__pycache__/
+.pytest_cache/
+node_modules/
+.next/
