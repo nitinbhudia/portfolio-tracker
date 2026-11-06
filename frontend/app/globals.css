@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body { @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased; }
+.num { font-variant-numeric: tabular-nums; }
+.card { @apply rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900; }
+.tbl th { @apply px-2 py-1.5 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap; }
+.tbl td { @apply px-2 py-1.5 whitespace-nowrap border-t border-slate-100 dark:border-slate-800; }
