@@ -15,7 +15,8 @@ export default function PositionsPage() {
     { key: "ccy", label: "Ccy", type: "enum", get: (p) => p.currency },
     { key: "shares", label: "Shares", type: "number", align: "right", get: (p) => p.shares, render: (p) => qty(p.shares) },
     { key: "avg", label: "Avg FIFO cost", type: "number", align: "right", get: (p) => p.avg_cost, render: (p) => num(p.avg_cost) },
-    { key: "price", label: "Price (sheet)", type: "number", align: "right", get: (p) => p.price, render: (p) => num(p.price) },
+    { key: "price", label: "Price", type: "number", align: "right", get: (p) => p.price, render: (p) => num(p.price) },
+    { key: "pdate", label: "Price date", type: "date", get: (p) => p.price_date, render: (p) => <span title={p.price_source ?? ""}>{p.price_date ?? "—"}</span> },
     { key: "cost", label: "Cost $", type: "number", align: "right", get: (p) => p.cost_usd, render: (p) => usd(p.cost_usd) },
     { key: "value", label: "Value $", type: "number", align: "right", firstDir: "desc", get: (p) => p.value_usd, render: (p) => usd(p.value_usd) },
     { key: "pl", label: "Unrealised $", type: "number", align: "right", firstDir: "desc", get: (p) => p.unrealised_usd, render: (p) => <Usd v={p.unrealised_usd} /> },
@@ -31,7 +32,7 @@ export default function PositionsPage() {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Open positions</h1>
       <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Value" value={usd(t.value_usd)} sub={`as of ${d.as_of}`} />
+        <Stat label="Value" value={usd(t.value_usd)} sub={<>prices up to {d.as_of} · <a className="underline" href="/prices">update</a></>} />
         <Stat label="Cost (FIFO)" value={usd(t.cost_usd)} />
         <Stat label="Unrealised gain" value={<Usd v={t.unrealised_usd} />} sub={<Pct v={t.cost_usd ? (t.unrealised_usd / t.cost_usd) * 100 : null} />} />
       </div>

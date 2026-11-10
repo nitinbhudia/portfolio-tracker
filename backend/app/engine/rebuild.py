@@ -47,7 +47,7 @@ ACTIONS = {
     "price_unit": ("fix", "keep", "exclude"),
     "sale_unlinked": ("sheet_only", "link"),
 }
-POSITION_ACTIONS = ("sell", "exclude", "keep_open", "keep", "fix", "add_buy", "sale_row")
+POSITION_ACTIONS = ("sell", "exclude", "keep_open", "keep", "fix", "add_buy", "sale_row", "edit")
 SALE_ACTIONS = ("sheet_only", "link")
 
 
@@ -72,6 +72,8 @@ class Trade:
     sale_row: int | None = None  # sales-log row, for sells
     ref_price: float | None = None  # for sells: the buy price written on the sale row (the sheet's cost)
     note: str | None = None
+    fee: float = 0.0  # in the trade's currency (not pence): added to a purchase's cost, taken off a sale's proceeds
+    source: str = "sheet"  # "sheet" | "app" (entered in the app)
 
     @property
     def value(self) -> float:
@@ -159,8 +161,11 @@ def _parse_sale(dec: dict) -> tuple[date, float] | None:
 
 
 def rebuild(wb: Workbook, decisions: dict[str, dict] | None = None, groups: dict[str, str] | None = None,
-            group_names: dict[str, str] | None = None) -> Rebuild:
-    """decisions: review key -> decision. groups: name_key -> stock group key; group_names: group -> display name."""
+            group_names: dict[str, str] | None = None, manual: list[dict] | None = None,
+            fees: dict[str, float] | None = None) -> Rebuild:
+    """decisions: review key -> decision. groups: name_key -> stock group key; group_names: group -> display name.
+    manual: trades entered in the app ({id, kind, date, name, shares, price, currency, pence, broker, fee}).
+    fees: trade id (B12, S40, A40, L7) -> fee in the trade's currency, for trades from the sheet."""
     decisions = decisions or {}
     groups = groups or {}
     group_names = group_names or {}
@@ -271,7 +276,8 @@ def rebuild(wb: Workbook, decisions: dict[str, dict] | None = None, groups: dict
                 add_item(p, "sell_price_missing", "Sell price entered.", "resolved", dec, lrows)
                 trades.append(mk("sell", p, sd[0], p.shares, sd[1], f"S{p.row}", s.row, p.price))
             else:
-                trades.append(mk("sell", p, s.date, p.shares, p.live_price, f"S{p.row}", s.row, p.price))
+                sale_day = date.fromisoformat(dec["fields"]["sale_date"]) if (dec.get("fields") or {}).get("sale_date") else s.date
+                trades.append(mk("sell", p, sale_day, p.shares, p.live_price, f"S{p.row}", s.row, p.price))
             roles[p.row] = "sale"
             continue
         if p.pl:  # sold in place, no date
@@ -388,7 +394,17 @@ def rebuild(wb: Workbook, decisions: dict[str, dict] | None = None, groups: dict
                 continue
             t = Trade(**{**t.__dict__, "shares": left})
         final.append(t)
-    final.sort(key=lambda t: (t.date, 0 if t.kind == "buy" else 1, t.row))
+    fees = fees or {}
+    for t in final:
+        t.fee = float(fees.get(t.id, 0.0))
+    for mt in manual or []:
+        k = name_key(mt["name"]) or f"manual {mt['id']}"
+        g = groups.get(k, k)
+        final.append(Trade(id=f"M{mt['id']}", kind=mt["kind"], date=mt["date"], stock=group_names.get(g, mt["name"]), stock_key=g,
+                           pool=f"{g}|{mt['currency']}", shares=float(mt["shares"]), price=float(mt["price"]), currency=mt["currency"],
+                           scale=0.01 if mt.get("pence") else 1.0, broker=mt.get("broker") or "", row=0, fee=float(mt.get("fee") or 0.0),
+                           source="app", note=mt.get("note")))
+    final.sort(key=lambda t: (t.date, 0 if t.kind == "buy" else 1, t.row, t.id))
 
     role_counts = defaultdict(int)
     for r in pos_by_row:

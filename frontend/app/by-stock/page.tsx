@@ -17,7 +17,7 @@ function Detail({ pool, onClose }: { pool: string; onClose: () => void }) {
       {s && (
         <dl className="mb-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
           <div><dt className="text-xs text-slate-500">Total gain</dt><dd className="font-semibold"><Usd v={s.total_usd} /> (<Pct v={s.total_return_pct} />)</dd></div>
-          <div><dt className="text-xs text-slate-500">Realised / unrealised</dt><dd><Usd v={s.realised_usd} /> / <Usd v={s.unrealised_usd} /></dd></div>
+          <div><dt className="text-xs text-slate-500">Realised / unrealised</dt><dd><Usd v={s.realised_usd} /> / <Usd v={s.unrealised_usd} />{s.dividends_usd ? <> + <Usd v={s.dividends_usd} /> dividends</> : null}</dd></div>
           <div><dt className="text-xs text-slate-500">Bought / sold</dt><dd className="num">{qty(s.shares_bought)} @ {num(s.avg_buy_price)} avg / {qty(s.shares_sold)} @ {num(s.avg_sell_price)} avg</dd></div>
         </dl>
       )}
@@ -54,6 +54,7 @@ export default function ByStockPage() {
     { key: "ret", label: "Total %", type: "number", align: "right", firstDir: "desc", get: (r) => r.total_return_pct, render: (r) => <Pct v={r.total_return_pct} /> },
     { key: "real", label: "Realised $", type: "number", align: "right", get: (r) => r.realised_usd, render: (r) => <Usd v={r.realised_usd} /> },
     { key: "unreal", label: "Unrealised $", type: "number", align: "right", get: (r) => r.unrealised_usd, render: (r) => <Usd v={r.unrealised_usd} /> },
+    { key: "div", label: "Dividends $", type: "number", align: "right", get: (r) => r.dividends_usd, render: (r) => (r.dividends_usd ? usd(r.dividends_usd) : "") },
     { key: "bought", label: "Bought $", type: "number", align: "right", get: (r) => r.bought_usd, render: (r) => usd(r.bought_usd) },
     { key: "buys", label: "Buys", type: "number", align: "right", get: (r) => r.buys },
     { key: "sells", label: "Sells", type: "number", align: "right", get: (r) => r.sells },
@@ -65,7 +66,7 @@ export default function ByStockPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Per stock</h1>
-      <Note tone="slate">Total gain = realised (FIFO, USD) + unrealised at the sheet&apos;s prices of {q.data.as_of}. Total % = total gain ÷ everything you paid for
+      <Note tone="slate">Total gain = realised (FIFO, USD) + unrealised at current prices + dividends. Total % = total gain ÷ everything you paid for
         the stock. A stock listed in two currencies appears once per currency.</Note>
       {open && <Detail pool={open} onClose={() => setOpen(null)} />}
       <Section title={`${q.data.stocks.length} stocks`}>

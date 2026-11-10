@@ -40,7 +40,7 @@ export default function ReturnsPage() {
         <div className="grid gap-3 sm:grid-cols-3">
           <Stat label="Money-weighted return (XIRR)" value={<Pct v={r.money_in_shares.xirr_pct} />} sub="per year" />
           <Stat label="Realised ÷ cost of shares sold" value={<Pct v={r.money_in_shares.return_on_cost_sold_pct} />} sub={`on ${usd(r.money_in_shares.cost_of_shares_sold_usd)}`} />
-          <Stat label="Total gain" value={<Usd v={r.total_gain_usd} />} sub={<>realised <Usd v={r.realised_usd} /> + unrealised <Usd v={r.unrealised_usd} /></>} />
+          <Stat label="Total gain" value={<Usd v={r.total_gain_usd} />} sub={<>realised <Usd v={r.realised_usd} /> + unrealised <Usd v={r.unrealised_usd} />{r.dividends_usd ? <> + dividends <Usd v={r.dividends_usd} /></> : null}</>} />
         </div>
         <p className="mt-2 text-xs text-slate-500">{r.money_in_shares.explain}</p>
       </Section>
