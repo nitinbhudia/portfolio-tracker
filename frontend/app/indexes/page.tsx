@@ -60,8 +60,7 @@ function DataPanel({ status, onChanged }: { status: BenchmarksResp["status"]; on
     <Section title="Index data" right={<button className={btnPrimary} disabled={busy !== null} onClick={fetchAll}>
       {busy ? `Fetching ${status.find((s) => s.id === busy)?.name ?? ""}…` : none ? "Get index data" : "Update all"}</button>}>
       {none && <p className="mb-2 text-sm">No index history yet. &quot;Get index data&quot; downloads free daily closes: S&amp;P 500 and Nasdaq from FRED
-        (Federal Reserve Bank of St. Louis), Russell 2000 and FTSE 100 from Stooq. If a download fails, upload a CSV for that index (columns Date as
-        YYYY-MM-DD and Close).</p>}
+        (Federal Reserve Bank of St. Louis), Russell 2000 and FTSE 100 from Stooq. If a download fails, upload a CSV for that index.</p>}
       <div className="overflow-x-auto">
         <table className="tbl w-full text-sm">
           <thead><tr><th>Index</th><th>Source</th><th className="text-right">Days</th><th>From</th><th>To</th><th>Upload CSV</th></tr></thead>
@@ -87,8 +86,10 @@ function DataPanel({ status, onChanged }: { status: BenchmarksResp["status"]; on
           })}</tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-slate-500">FRED series ids: SP500, NASDAQCOM, NASDAQ100. Stooq symbols: ^spx, ^ndq, ^ndx, ^rut, ^ukx. A CSV can come from any
-        site that lets you download daily history (Date and Close columns).</p>
+      <p className="mt-2 text-xs text-slate-500">FRED series ids: SP500, NASDAQCOM, NASDAQ100. Stooq symbols: ^spx, ^ndq, ^ndx, ^rut, ^ukx.
+        <b> CSV uploads</b> work with the daily-history downloads of most finance sites (Nasdaq.com, Investing.com, WSJ, Yahoo, FRED, Stooq…): a date
+        column (2026-11-09, 11/09/2026, 09/11/2026, 09.11.2026, Nov 9, 2026…) and a Close, Close/Last or Price column. Day-first or month-first is worked
+        out from the file; if it can&apos;t be told apart, the app says so instead of guessing.</p>
     </Section>
   );
 }

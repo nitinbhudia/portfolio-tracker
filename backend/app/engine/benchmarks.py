@@ -15,13 +15,12 @@ Index prices exclude dividends; so do your gains unless you entered dividends.
 from __future__ import annotations
 
 import bisect
-import csv
-import io
 from dataclasses import dataclass
 from datetime import date
 
 import httpx
 
+from . import indexcsv
 from .analytics import xirr
 from .fifo import Lot, Sale
 from .fx import Rates
@@ -46,35 +45,11 @@ class BenchmarkError(RuntimeError):
 
 
 def parse_csv(text: str) -> list[tuple[date, float]]:
-    """Daily closes from a CSV with a Date column (YYYY-MM-DD) and a Close column (also accepts 'Adj Close',
-    'Price', 'Zamkniecie'), as Stooq writes it, or FRED's two columns (observation_date, <series>). Blank or '.'
-    values (holidays in FRED) are skipped."""
-    text = text.lstrip("﻿").strip()
-    if not text or "," not in text.splitlines()[0]:
-        raise BenchmarkError("Not a CSV file with a header row (expected columns Date and Close).")
-    rows = list(csv.DictReader(io.StringIO(text)))
-    if not rows:
-        raise BenchmarkError("The CSV has a header but no rows.")
-    cols = {c.strip().lower(): c for c in rows[0].keys() if c}
-    dcol = next((cols[c] for c in ("date", "data") if c in cols), None)
-    dcol = dcol or cols.get("observation_date")  # FRED
-    ccol = next((cols[c] for c in ("close", "adj close", "price", "zamkniecie") if c in cols), None)
-    if dcol and not ccol and len(cols) == 2:  # FRED: the value column is named after the series
-        ccol = next(c for c in rows[0].keys() if c and c != dcol)
-    if not dcol or not ccol:
-        raise BenchmarkError(f"Couldn't find Date and Close columns (found: {', '.join(rows[0].keys())}).")
-    out = []
-    for r in rows:
-        try:
-            d = date.fromisoformat(str(r[dcol]).strip()[:10])
-            v = float(str(r[ccol]).replace(",", ""))
-        except (TypeError, ValueError):
-            continue
-        if v > 0:
-            out.append((d, v))
-    if not out:
-        raise BenchmarkError("No rows with a YYYY-MM-DD date and a positive close.")
-    return sorted(dict(out).items())
+    """Daily closes from a downloaded CSV; see `indexcsv` for the formats accepted."""
+    try:
+        return indexcsv.parse(text)
+    except indexcsv.CsvError as e:
+        raise BenchmarkError(str(e)) from e
 
 
 def _client() -> httpx.Client:
