@@ -2,6 +2,12 @@
 
 ## Index comparison and chart time ranges
 
+**CSV formats** (`engine/indexcsv.py`): comma, semicolon or tab files; Date/Datum/observation_date columns; Close,
+Close/Last, Adj Close, Price, Last, Schluss columns (or FRED's single value column); ISO, US, UK/European and named-month
+dates, two- or four-digit years, with or without times; `$ £ €`, thousands commas and decimal commas. Day-first vs
+month-first is decided per file (a number above 12, else the tidier run of trading days), and refused when it truly can't
+be told. Tested with Stooq, FRED, Nasdaq.com, Investing.com, WSJ, Yahoo and European layouts.
+
 **Fix (index data):** S&P 500, Nasdaq Composite and Nasdaq-100 now come from FRED (series SP500, NASDAQCOM, NASDAQ100; free,
 no key; verified live), Russell 2000 and FTSE 100 from Stooq (FRED doesn't carry them). The page fetches one index per
 request with a 25-second limit, so a slow or blocked site can't push the whole request past the web page's 2-minute

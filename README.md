@@ -43,7 +43,8 @@ If a port is busy, the script says which program is using it. Stop the app with 
    and keep prices current by typing them or uploading an updated workbook (prices only; nothing else changes).
 7. **vs Indexes**: compare your trades with the S&P 500, Nasdaq Composite, Nasdaq-100, Russell 2000 and FTSE 100. Press
    "Get index data" (free daily history, no key: S&P 500 and Nasdaq from FRED, Russell 2000 and FTSE 100 from Stooq); if a
-   download fails, the page says why for that index and you can upload a CSV for it (Date, Close).
+   download fails, the page says why for that index and you can upload a CSV for it: the daily-history download of most
+   finance sites works (US, UK and European date formats, Close / Close/Last / Price columns).
 8. **Time range**: the buttons at the top (1M, 3M, 6M, YTD, 1Y, 3Y, 5Y, All, or your own dates) change every chart.
 9. **Check vs sheet**: the app's rebuilt numbers next to your sheet's own (sales-log P/L per year, open
    positions' cost and P/L), with the reason for every difference.
