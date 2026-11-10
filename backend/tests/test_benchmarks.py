@@ -40,6 +40,32 @@ def test_parse_csv_formats_and_errors():
             BM.parse_csv(bad)
 
 
+def test_fred_format_and_fetch():
+    import httpx
+    body = "observation_date,SP500\n2026-11-04,7688.62\n2026-11-05,\n2026-11-06,.\n2026-11-09,7353.73\n"
+    assert BM.parse_csv(body) == [(D(2026, 11, 4), 7688.62), (D(2026, 11, 9), 7353.73)]  # holidays skipped
+
+    def handler(req):
+        assert req.url.host == "fred.stlouisfed.org" and req.url.params["id"] == "SP500"
+        return httpx.Response(200, text=body)
+    assert BM.fetch("fred", "SP500", httpx.Client(transport=httpx.MockTransport(handler)))[-1] == (D(2026, 11, 9), 7353.73)
+
+    def html(req):
+        return httpx.Response(200, text="<html>error</html>")
+    with pytest.raises(BM.BenchmarkError, match="FRED returned no data"):
+        BM.fetch("fred", "NOPE", httpx.Client(transport=httpx.MockTransport(html)))
+
+    def refuse(req):
+        raise httpx.ConnectError("reset")
+    with pytest.raises(BM.BenchmarkError, match="Couldn't reach Stooq"):
+        BM.fetch("stooq", "^rut", httpx.Client(transport=httpx.MockTransport(refuse)))
+
+    def slow(req):
+        raise httpx.ReadTimeout("slow")
+    with pytest.raises(BM.BenchmarkError, match="didn't answer in time"):
+        BM.fetch("fred", "SP500", httpx.Client(transport=httpx.MockTransport(slow)))
+
+
 def test_fetch_stooq_parses_and_reports_no_data():
     import httpx
 
@@ -66,7 +92,7 @@ def test_series_in_usd_and_stale_gaps():
 def setup(client, monkeypatch, rows=None):  # noqa: F811
     upload(client)
     client.put("/api/review/P8", json={"action": "sell", "date": "2024-07-01", "price": 9.5})
-    monkeypatch.setattr(BMS, "FETCH", lambda sym: rows or step_series())
+    monkeypatch.setattr(BMS, "FETCH", lambda src, sym: rows or step_series())
 
 
 def test_refresh_status_and_symbols(client, monkeypatch):  # noqa: F811
@@ -74,16 +100,29 @@ def test_refresh_status_and_symbols(client, monkeypatch):  # noqa: F811
     r = client.post("/api/benchmarks/refresh").json()
     assert [x["id"] for x in r["results"]] == ["spx", "ndq", "ndx", "rut", "ukx"] and all(x["ok"] for x in r["results"])
     st = {x["id"]: x for x in client.get("/api/benchmarks/status").json()["indexes"]}
-    assert st["spx"]["symbol"] == "^spx" and st["ukx"]["currency"] == "GBP" and st["rut"]["points"] > 100
-    assert client.put("/api/benchmarks/rut", json={"symbol": "iwm.us"}).json()["indexes"][3]["symbol"] == "iwm.us"
+    assert (st["spx"]["source"], st["spx"]["symbol"]) == ("fred", "SP500") and (st["rut"]["source"], st["rut"]["symbol"]) == ("stooq", "^rut")
+    assert st["ukx"]["currency"] == "GBP" and st["rut"]["points"] > 100
+    rut = client.put("/api/benchmarks/rut", json={"symbol": "iwm.us"}).json()["indexes"][3]
+    assert (rut["source"], rut["symbol"]) == ("stooq", "iwm.us")
+    assert client.put("/api/benchmarks/rut", json={"symbol": "X", "source": "yahoo"}).status_code == 400
     assert client.put("/api/benchmarks/xxx", json={"symbol": "a"}).status_code == 404
+    seen = []
+    monkeypatch.setattr(BMS, "FETCH", lambda src, sym: seen.append((src, sym)) or step_series())
+    one = client.post("/api/benchmarks/ndq/refresh").json()
+    assert [r["id"] for r in one["results"]] == ["ndq"] and seen == [("fred", "NASDAQCOM")]
 
-    def boom(sym):
+    def boom(src, sym):
         raise BM.BenchmarkError("Stooq answered HTTP 503. Upload a CSV instead.")
     monkeypatch.setattr(BMS, "FETCH", boom)
     r = client.post("/api/benchmarks/refresh").json()
     assert not r["results"][0]["ok"] and "503" in r["results"][0]["message"]
     assert client.get("/api/benchmarks/status").json()["indexes"][0]["points"] > 100  # earlier data kept
+
+    def crash(src, sym):
+        raise ValueError("something odd")
+    monkeypatch.setattr(BMS, "FETCH", crash)
+    r = client.post("/api/benchmarks/spx/refresh")
+    assert r.status_code == 200 and "Unexpected problem (ValueError" in r.json()["results"][0]["message"]
 
 
 def test_upload_csv(client, monkeypatch):  # noqa: F811

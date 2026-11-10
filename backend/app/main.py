@@ -324,6 +324,11 @@ def benchmarks_refresh(db: Session = Depends(get_db)):
     return BMS.refresh(db)
 
 
+@app.post("/api/benchmarks/{index_id}/refresh")
+def benchmarks_refresh_one(index_id: str, db: Session = Depends(get_db)):
+    return BMS.refresh(db, [index_id])
+
+
 @app.post("/api/benchmarks/{index_id}/upload")
 async def benchmarks_upload(index_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     data = await file.read(10 * 1024 * 1024 + 1)
@@ -334,8 +339,9 @@ async def benchmarks_upload(index_id: str, file: UploadFile = File(...), db: Ses
 
 class SymbolIn(BaseModel):
     symbol: str
+    source: str | None = None
 
 
 @app.put("/api/benchmarks/{index_id}")
 def benchmarks_symbol(index_id: str, body: SymbolIn, db: Session = Depends(get_db)):
-    return BMS.set_symbol(db, index_id, body.symbol)
+    return BMS.set_symbol(db, index_id, body.symbol, body.source)

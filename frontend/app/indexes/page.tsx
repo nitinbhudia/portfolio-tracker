@@ -12,57 +12,83 @@ import { label } from "@/lib/range";
 const COLORS: Record<string, string> = { spx: "var(--viz-1)", ndq: "var(--viz-2)", ndx: "var(--viz-3)", rut: "var(--viz-4)", ukx: "var(--viz-5)" };
 
 function DataPanel({ status, onChanged }: { status: BenchmarksResp["status"]; onChanged: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const [msgs, setMsgs] = useState<RefreshResp["results"]>([]);
-  const [err, setErr] = useState<string | null>(null);
-  const [sym, setSym] = useState<Record<string, string>>({});
-  const run = async (fn: () => Promise<RefreshResp | { indexes: unknown }>) => {
-    setBusy(true);
-    setErr(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msgs, setMsgs] = useState<Record<string, { ok: boolean; text: string }>>({});
+  const [edit, setEdit] = useState<Record<string, { source: string; symbol: string }>>({});
+  const note = (id: string, ok: boolean, text: string) => setMsgs((m) => ({ ...m, [id]: { ok, text } }));
+  const fail = (e: unknown) => (e instanceof ApiError ? e.message : String(e));
+  const fetchAll = async () => {  // one index at a time: a slow site can't hold up the others
+    for (const s of status) {
+      setBusy(s.id);
+      try {
+        const r = await apiFetch<RefreshResp>(`/api/benchmarks/${s.id}/refresh`, { method: "POST" });
+        const x = r.results[0];
+        note(s.id, x.ok, x.ok ? `${x.points} days, up to ${x.last}` : x.message ?? "failed");
+      } catch (e) {
+        note(s.id, false, fail(e));
+      }
+    }
+    setBusy(null);
+    onChanged();
+  };
+  const uploadFile = async (id: string, f: File | undefined) => {
+    if (!f) return;
+    setBusy(id);
     try {
-      const r = await fn();
-      if ("results" in r) setMsgs(r.results as RefreshResp["results"]);
+      const fd = new FormData();
+      fd.append("file", f);
+      const r = await apiFetch<RefreshResp>(`/api/benchmarks/${id}/upload`, { method: "POST", body: fd });
+      note(id, true, `${r.results[0].points} days from ${f.name}`);
       onChanged();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : String(e));
+      note(id, false, fail(e));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
-  const uploadFile = (id: string, f: File | undefined) => {
-    if (!f) return;
-    const fd = new FormData();
-    fd.append("file", f);
-    run(() => apiFetch<RefreshResp>(`/api/benchmarks/${id}/upload`, { method: "POST", body: fd }));
+  const saveSource = async (id: string) => {
+    try {
+      await apiFetch(`/api/benchmarks/${id}`, jsonInit("PUT", edit[id]));
+      setEdit((x) => { const n = { ...x }; delete n[id]; return n; });
+      onChanged();
+    } catch (e) {
+      note(id, false, fail(e));
+    }
   };
   const none = status.every((s) => s.points === 0);
   return (
-    <Section title="Index data" right={<button className={btnPrimary} disabled={busy} onClick={() => run(() => apiFetch<RefreshResp>("/api/benchmarks/refresh", { method: "POST" }))}>
-      {busy ? "Fetching…" : none ? "Get index data" : "Update all"}</button>}>
-      {none && <p className="mb-2 text-sm">No index history yet. &quot;Get index data&quot; downloads daily closes from Stooq (free, no key). If that doesn&apos;t work,
-        upload a CSV per index (columns Date as YYYY-MM-DD and Close), for example Stooq&apos;s own download in your browser:
-        stooq.com/q/d/l/?s=^spx&amp;i=d.</p>}
+    <Section title="Index data" right={<button className={btnPrimary} disabled={busy !== null} onClick={fetchAll}>
+      {busy ? `Fetching ${status.find((s) => s.id === busy)?.name ?? ""}…` : none ? "Get index data" : "Update all"}</button>}>
+      {none && <p className="mb-2 text-sm">No index history yet. &quot;Get index data&quot; downloads free daily closes: S&amp;P 500 and Nasdaq from FRED
+        (Federal Reserve Bank of St. Louis), Russell 2000 and FTSE 100 from Stooq. If a download fails, upload a CSV for that index (columns Date as
+        YYYY-MM-DD and Close).</p>}
       <div className="overflow-x-auto">
         <table className="tbl w-full text-sm">
-          <thead><tr><th>Index</th><th>Stooq symbol</th><th className="text-right">Days</th><th>From</th><th>To</th><th>Upload CSV</th></tr></thead>
+          <thead><tr><th>Index</th><th>Source</th><th className="text-right">Days</th><th>From</th><th>To</th><th>Upload CSV</th></tr></thead>
           <tbody>{status.map((s) => {
-            const m = msgs.find((x) => x.id === s.id);
+            const m = msgs[s.id];
+            const e = edit[s.id] ?? { source: s.source, symbol: s.symbol };
+            const dirty = e.source !== s.source || e.symbol !== s.symbol;
             return (
               <tr key={s.id}>
                 <td><span className="mr-1.5 inline-block h-0.5 w-4 align-middle" style={{ background: COLORS[s.id] }} />{s.name} <span className="text-xs text-slate-500">{s.currency}</span>
-                  {m && !m.ok && <div role="alert" className="max-w-xs whitespace-normal text-xs text-rose-600">{m.message}</div>}</td>
+                  {busy === s.id && <span className="ml-1 text-xs text-slate-500">working…</span>}
+                  {m && <div role={m.ok ? "status" : "alert"} className={`max-w-sm whitespace-normal text-xs ${m.ok ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600"}`}>{m.text}</div>}</td>
                 <td><span className="flex items-center gap-1">
-                  <input aria-label={`Stooq symbol for ${s.name}`} className={`${input} w-24`} value={sym[s.id] ?? s.symbol} onChange={(e) => setSym({ ...sym, [s.id]: e.target.value })} />
-                  {(sym[s.id] ?? s.symbol) !== s.symbol && <button className={`${btn} text-xs`} onClick={() => run(() => apiFetch(`/api/benchmarks/${s.id}`, jsonInit("PUT", { symbol: sym[s.id] })))}>Save</button>}
+                  <select aria-label={`Source for ${s.name}`} className={input} value={e.source} onChange={(ev) => setEdit({ ...edit, [s.id]: { ...e, source: ev.target.value } })}>
+                    <option value="fred">FRED</option><option value="stooq">Stooq</option></select>
+                  <input aria-label={`Symbol for ${s.name}`} className={`${input} w-28`} value={e.symbol} onChange={(ev) => setEdit({ ...edit, [s.id]: { ...e, symbol: ev.target.value } })} />
+                  {dirty && <button className={`${btn} text-xs`} onClick={() => saveSource(s.id)}>Save</button>}
                 </span></td>
                 <td className="num text-right">{s.points || "—"}</td><td className="num">{s.first ?? "—"}</td><td className="num">{s.last ?? "—"}</td>
-                <td><input aria-label={`CSV for ${s.name}`} type="file" accept=".csv,text/csv" className="max-w-[12rem] text-xs" onChange={(e) => uploadFile(s.id, e.target.files?.[0])} /></td>
+                <td><input aria-label={`CSV for ${s.name}`} type="file" accept=".csv,text/csv" className="max-w-[12rem] text-xs" onChange={(ev) => uploadFile(s.id, ev.target.files?.[0])} /></td>
               </tr>
             );
           })}</tbody>
         </table>
       </div>
-      {err && <div role="alert" className="mt-1 text-xs text-rose-600">{err}</div>}
+      <p className="mt-2 text-xs text-slate-500">FRED series ids: SP500, NASDAQCOM, NASDAQ100. Stooq symbols: ^spx, ^ndq, ^ndx, ^rut, ^ukx. A CSV can come from any
+        site that lets you download daily history (Date and Close columns).</p>
     </Section>
   );
 }

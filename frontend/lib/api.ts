@@ -24,7 +24,9 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
   if (!res.ok) {
     const b = body as { error?: string; message?: string; detail?: unknown } | null;
-    const msg = b?.message ?? (typeof b?.detail === "string" ? b.detail : null) ?? (res.status >= 500 ? "The backend isn't responding (is it running on port 8001?)." : `HTTP ${res.status}`);
+    const snippet = text && !b ? ` (${text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 120)})` : "";
+    const msg = b?.message ?? (typeof b?.detail === "string" ? b.detail : null)
+      ?? (res.status >= 500 ? `The app's backend answered HTTP ${res.status}${snippet}. If this repeats, check the Terminal window running the app.` : `HTTP ${res.status}${snippet}`);
     throw new ApiError(b?.error ?? `http_${res.status}`, msg, res.status);
   }
   return body as T;
@@ -174,7 +176,7 @@ export type PricesResp = { prices: PriceRow[]; sheet_as_of: string; as_of: strin
 
 // ---------------------------------------------------------------- index comparison
 
-export type IndexStatus = { id: string; name: string; symbol: string; currency: string; points: number; first: string | null; last: string | null };
+export type IndexStatus = { id: string; name: string; source: "fred" | "stooq"; symbol: string; currency: string; points: number; first: string | null; last: string | null };
 export type IndexCompare = {
   realised: { sales: number; compared: number; cost_usd: number; gain_usd: number; index_gain_usd: number; beat: number; not_compared: number };
   open: null | { lots: number; compared: number; cost_usd: number; index_gain_usd: number; not_compared: number };
