@@ -208,6 +208,24 @@ def simulate_rebalance(db: Session, by: str, targets: dict[str, float], whole_sh
     return out
 
 
+def simulate_average_down(db: Session, pool: str, buy_price: float | None = None, shares: float | None = None,
+                          amount_usd: float | None = None, target_break_even: float | None = None, fee: float = 0.0) -> dict:
+    hs, today, _, _ = holdings(db)
+    try:
+        h = W.select(hs, [pool])[0]
+        out = W.average_down(h, today, buy_price, shares, amount_usd, target_break_even, fee)
+    except W.WhatIfError as e:
+        raise BadRequest(str(e)) from e
+    out["as_of"] = today.isoformat()
+    return out
+
+
+def losers(db: Session) -> list[dict]:
+    """Open positions below their FIFO cost, biggest loss first (for the average-down picker)."""
+    rows = overview(db)["holdings"]
+    return sorted([r for r in rows if r["unrealised_usd"] is not None and r["unrealised_usd"] < 0], key=lambda r: r["unrealised_usd"])
+
+
 def find(db: Session, query: str) -> list[dict]:
     """Open positions whose name contains the words of `query` (for the assistant to resolve names)."""
     hs, _, _, _ = holdings(db)

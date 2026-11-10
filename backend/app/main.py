@@ -391,6 +391,20 @@ def whatif_rebalance(body: RebalanceIn, db: Session = Depends(get_db)):
     return WS.simulate_rebalance(db, body.by, body.targets, body.whole_shares)
 
 
+class AverageDownIn(BaseModel):
+    pool: str
+    buy_price: float | None = None
+    shares: float | None = None
+    amount_usd: float | None = None
+    target_break_even: float | None = None
+    fee: float = 0.0
+
+
+@app.post("/api/whatif/average-down")
+def whatif_average_down(body: AverageDownIn, db: Session = Depends(get_db)):
+    return WS.simulate_average_down(db, body.pool, body.buy_price, body.shares, body.amount_usd, body.target_break_even, body.fee)
+
+
 @app.get("/api/sectors")
 def sectors(db: Session = Depends(get_db)):
     return WS.sectors(db)

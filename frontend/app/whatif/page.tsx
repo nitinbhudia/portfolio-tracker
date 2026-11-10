@@ -7,6 +7,8 @@ import { ErrorBox, Loading, Note, Pct, Section, Stat, Usd, btn, btnPrimary, inpu
 import { ApiError, apiFetch, jsonInit, type WIOverview, type WIRebalResp, type WISellResp, useApi } from "@/lib/api";
 import { num, pct, qty, usd } from "@/lib/format";
 
+import AverageDownTab from "./AverageDown";
+
 function SaleResult({ r }: { r: WISellResp }) {
   const [open, setOpen] = useState<string | null>(null);
   const t = r.totals;
@@ -173,7 +175,7 @@ function RebalanceTab({ o }: { o: WIOverview }) {
 
 export default function WhatIfPage() {
   const q = useApi<WIOverview>("/api/whatif");
-  const [tab, setTab] = useState<"sell" | "rebalance">("sell");
+  const [tab, setTab] = useState<"sell" | "rebalance" | "average">("sell");
   if (q.error) return <ErrorBox error={q.error} onRetry={q.reload} />;
   if (!q.data) return <Loading />;
   return (
@@ -182,10 +184,10 @@ export default function WhatIfPage() {
       <Note tone="slate">Simulations only: nothing is sold, bought or saved. FIFO (oldest purchases first), before tax, at each position&apos;s latest price
         ({q.data.as_of}). You can also just <Link className="underline" href="/ask">ask</Link> in words.</Note>
       <div role="tablist" className="inline-flex overflow-hidden rounded border border-slate-300 text-sm dark:border-slate-700">
-        {(["sell", "rebalance"] as const).map((k) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-          className={`px-3 py-1 ${tab === k ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : ""}`}>{k === "sell" ? "If I sell…" : "Rebalance"}</button>)}
+        {(["sell", "rebalance", "average"] as const).map((k) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+          className={`px-3 py-1 ${tab === k ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : ""}`}>{k === "sell" ? "If I sell…" : k === "rebalance" ? "Rebalance" : "Average down"}</button>)}
       </div>
-      {tab === "sell" ? <SellTab o={q.data} /> : <RebalanceTab o={q.data} />}
+      {tab === "sell" ? <SellTab o={q.data} /> : tab === "rebalance" ? <RebalanceTab o={q.data} /> : <AverageDownTab o={q.data} />}
     </div>
   );
 }
