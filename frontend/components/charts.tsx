@@ -4,9 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { axisLabel, niceTicks, useCompact } from "@/lib/chart";
 
-type Tip = { x: number; y: number; lines: [string, string][] } | null;
+export type Tip = { x: number; y: number; lines: [string, string][] } | null;
 
-function Tooltip({ tip }: { tip: Tip }) {
+export function Tooltip({ tip }: { tip: Tip }) {
   if (!tip) return null;
   return (
     <div role="tooltip" className="pointer-events-none absolute z-10 min-w-36 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs shadow-md dark:border-slate-700 dark:bg-slate-900"
@@ -21,7 +21,7 @@ function Tooltip({ tip }: { tip: Tip }) {
 }
 
 /** Real pixel width of the container, so text and marks keep their size at any width (no SVG scaling). */
-function useWidth(ref: React.RefObject<HTMLDivElement | null>, initial = 640): number {
+export function useWidth(ref: React.RefObject<HTMLDivElement | null>, initial = 640): number {
   const [w, setW] = useState(initial);
   useEffect(() => {
     const el = ref.current;
@@ -36,9 +36,11 @@ function useWidth(ref: React.RefObject<HTMLDivElement | null>, initial = 640): n
 const PAD = { l: 52, r: 12, t: 12, b: 26 };
 
 /** Columns from a zero baseline; gains in blue, losses in red (polarity), 4px rounded data-end. */
-export function Columns({ data, height = 220, fmt, label }: {
+export function Columns({ data, height = 220, fmt, label, onPick }: {
   data: { key: string; label: string; value: number; lines?: [string, string][] }[];
   height?: number; fmt: (v: number) => string; label: string;
+  /** Makes each column a button (click or Enter) — for drill-down. */
+  onPick?: (key: string) => void;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const W = useWidth(wrap);
@@ -77,7 +79,9 @@ export function Columns({ data, height = 220, fmt, label }: {
             ? `M${x},${y0} V${top + r} Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r} V${y0} Z`
             : `M${x},${y0} V${top + h - r} Q${x},${top + h} ${x + r},${top + h} H${x + bw - r} Q${x + bw},${top + h} ${x + bw},${top + h - r} V${y0} Z`;
           return (
-            <g key={d.key} tabIndex={0} aria-label={`${d.label}: ${fmt(d.value)}`} onPointerMove={() => show(d, i)} onFocus={() => show(d, i)} onBlur={() => setTip(null)}>
+            <g key={d.key} tabIndex={0} aria-label={`${d.label}: ${fmt(d.value)}`} onPointerMove={() => show(d, i)} onFocus={() => show(d, i)} onBlur={() => setTip(null)}
+              {...(onPick ? { role: "button", style: { cursor: "pointer" }, onClick: () => onPick(d.key),
+                onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(d.key); } } } : {})}>
               <rect x={PAD.l + band * i} y={PAD.t} width={band} height={ih} fill="transparent" />
               {path && <path d={path} fill={pos ? "var(--viz-1)" : "var(--viz-neg)"} opacity={hover && hover !== d.key ? 0.55 : 1} />}
               {i % every === 0 && <text x={PAD.l + band * i + band / 2} y={H - 8} textAnchor="middle" fontSize={10} fill="var(--viz-muted)">{d.label}</text>}

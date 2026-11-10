@@ -46,7 +46,10 @@ If a port is busy, the script says which program is using it. Stop the app with 
    download fails, the page says why for that index and you can upload a CSV for it: the daily-history download of most
    finance sites works (US, UK and European date formats, Close / Close/Last / Price columns).
 8. **Time range**: the buttons at the top (1M, 3M, 6M, YTD, 1Y, 3Y, 5Y, All, or your own dates) change every chart.
-9. **What-if**: "if I sold now" for one stock, several, a sector or everything (FIFO gain per purchase lot, before tax),
+9. **Explore**: interactive drill-down charts. A portfolio map (size = value, colour = gain/loss %): click a sector, then a
+   stock, then see its purchase lots. Realised gains over time: click a year, then a month, then a sale to see which
+   purchases it sold (FIFO). A trail above each chart takes you back up; hover or tab to anything for details.
+   **What-if**: "if I sold now" for one stock, several, a sector or everything (FIFO gain per purchase lot, before tax),
    and a rebalancing preview by stock or sector (trades, gain realised, cash raised, weights before and after).
    **Average down**: for a position in loss, what buying more does to your break-even. Plan by shares, an amount or a
    target break-even, at today's price or a lower one; compares with doing nothing (rise needed, loss if it falls another

@@ -226,6 +226,27 @@ def losers(db: Session) -> list[dict]:
     return sorted([r for r in rows if r["unrealised_usd"] is not None and r["unrealised_usd"] < 0], key=lambda r: r["unrealised_usd"])
 
 
+def portfolio_map(db: Session) -> dict:
+    """Open positions with their purchase lots, for the drill-down map (sector -> stock -> lot)."""
+    hs, today, _, _ = holdings(db)
+    out = []
+    for h in hs.values():
+        if h.value_usd is None:
+            continue
+        lots = []
+        for lot in h.lots:
+            c = lot.shares * (lot.price * lot.scale + lot.fee_per_share) * lot.cost_rate if lot.cost_rate is not None else None
+            v = lot.shares * h.unit_usd
+            lots.append({"bought": lot.date.isoformat(), "broker": lot.broker, "shares": lot.shares, "buy_price": lot.price,
+                         "cost_usd": c, "value_usd": v, "gain_usd": v - c if c is not None else None})
+        c = h.cost_usd
+        out.append({"pool": h.pool, "stock": h.stock, "sector": h.sector or "(no sector)", "currency": h.currency,
+                    "pence": h.scale == 0.01, "shares": h.shares, "price": h.price, "value_usd": h.value_usd, "cost_usd": c,
+                    "gain_usd": h.value_usd - c if c is not None else None, "lots": lots})
+    return {"as_of": today.isoformat(), "total_usd": sum(x["value_usd"] for x in out),
+            "positions": sorted(out, key=lambda x: -x["value_usd"])}
+
+
 def find(db: Session, query: str) -> list[dict]:
     """Open positions whose name contains the words of `query` (for the assistant to resolve names)."""
     hs, _, _, _ = holdings(db)
