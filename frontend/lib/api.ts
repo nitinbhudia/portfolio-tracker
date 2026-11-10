@@ -219,3 +219,13 @@ export type ChatCall = { tool: string; input: Record<string, unknown>; error: bo
 export type ChatTurn = { role: "user" | "assistant"; text: string; calls?: ChatCall[]; date?: string };
 export type ChatResp = { chat_id: number; display: ChatTurn[] };
 export type AssistantStatus = { available: boolean; model: string; setup: string };
+
+export type ADPlan = { shares_added: number; money_usd: number; shares_after: number; cost_after_usd: number; break_even: number; break_even_usd: number;
+  break_even_cut_pct: number; rise_needed_from_buy_pct: number; rise_needed_from_today_pct: number; value_at_buy_price_usd: number;
+  unrealised_at_buy_price_usd: number; if_falls_further_usd: number; if_falls_further_without_usd: number; at_old_break_even_gain_usd: number;
+  multiple?: number; buy_price?: number;
+  sell_added_at_break_even?: { shares: number; gain_usd: number; lots: { bought: string; shares: number; gain_usd: number }[] } };
+export type ADResp = { pool: string; stock: string; currency: string; pence: boolean; price: number; price_date: string | null; as_of: string;
+  now: { shares: number; cost_usd: number; value_usd: number; unrealised_usd: number; break_even: number; break_even_usd: number;
+    rise_needed_pct: number; in_loss: boolean; if_falls_further_usd: number };
+  plan: ADPlan | null; table: { drop_pct: number; buy_price: number; plans: ADPlan[] }[]; stress_pct: number; notes: string };

@@ -212,3 +212,101 @@ def rebalance(holdings: dict[str, Holding], by: str, targets: dict[str, float], 
             "note": "Positions you didn't set a target for are left as they are. Positive cash = money raised; negative = extra "
                     "money you'd need to add. Whole shares only, so results land near the targets, not exactly on them." if whole_shares else
                     "Positions you didn't set a target for are left as they are. Positive cash = money raised; negative = extra money needed."}
+
+
+# ---------------------------------------------------------------- average down
+
+DROPS = (0.0, 10.0, 20.0, 30.0)  # buy-price scenarios: today's price and this % lower
+SIZES = (0.5, 1.0, 2.0)  # extra shares as a multiple of what you hold
+STRESS = 20.0  # "what if it then falls another 20%"
+
+
+def _plan(h: Holding, p_usd: float, n: float, fee_usd: float) -> dict:
+    """Buy n more shares at p_usd (USD per share) and compare with doing nothing."""
+    s, c = h.shares, h.cost_usd
+    unit = h.unit_usd
+    s2, c2 = s + n, c + n * p_usd + (fee_usd if n else 0.0)
+    be = c2 / s2
+    worse = p_usd * (1 - STRESS / 100)
+    return {"shares_added": n, "money_usd": n * p_usd + (fee_usd if n else 0.0), "shares_after": s2, "cost_after_usd": c2,
+            "break_even_usd": be, "break_even_cut_pct": (c / s - be) / (c / s) * 100,
+            "rise_needed_from_buy_pct": (be / p_usd - 1) * 100, "rise_needed_from_today_pct": (be / unit - 1) * 100,
+            "value_at_buy_price_usd": s2 * p_usd, "unrealised_at_buy_price_usd": s2 * p_usd - c2,
+            "if_falls_further_usd": s2 * worse - c2, "if_falls_further_without_usd": s * worse - c,
+            "at_old_break_even_gain_usd": s2 * (c / s) - c2}
+
+
+def average_down(h: Holding, today: date, buy_price: float | None = None, shares: float | None = None,
+                 amount_usd: float | None = None, target_break_even: float | None = None, fee: float = 0.0) -> dict:
+    """Break-even maths for buying more of a position. Prices in the listing's units (pence for GBP); fee in its currency.
+
+    New break-even = (cost so far + new money) / (shares after). Shares needed for a target break-even X at price p:
+    S * (avg - X) / (X - p). Everything in USD at today's rate for the new purchase; old lots keep their FIFO cost.
+    """
+    if h.price is None or h.rate is None:
+        raise WhatIfError(f"{h.stock}: no current price or exchange rate. Add a price on the Prices page.")
+    if h.cost_usd is None or h.shares <= 0:
+        raise WhatIfError(f"{h.stock}: the cost of some purchases isn't known in USD.")
+    k = h.scale * h.rate  # USD per listing unit
+    listing = lambda usd_: usd_ / k  # noqa: E731
+    p = h.price if buy_price is None else float(buy_price)
+    if p <= 0:
+        raise WhatIfError("The buy price must be more than 0.")
+    p_usd, fee_usd = p * k, fee * h.rate
+    s, c = h.shares, h.cost_usd
+    avg = c / s
+    given = [x is not None for x in (shares, amount_usd, target_break_even)]
+    if sum(given) > 1:
+        raise WhatIfError("Give shares, an amount or a target break-even, not more than one.")
+    n = None
+    if shares is not None:
+        if shares <= 0:
+            raise WhatIfError("The number of shares to buy must be more than 0.")
+        n = float(shares)
+    elif amount_usd is not None:
+        if amount_usd <= fee_usd:
+            raise WhatIfError("The amount must be more than the fee.")
+        n = math.floor((amount_usd - fee_usd) / p_usd + 1e-9)
+        if n <= 0:
+            raise WhatIfError(f"That amount doesn't buy one whole share at {p:g}.")
+    elif target_break_even is not None:
+        x = float(target_break_even) * k
+        if x >= avg:
+            raise WhatIfError(f"Your break-even is already {listing(avg):.2f}; pick a target below it.")
+        if x <= p_usd:
+            raise WhatIfError(f"A break-even of {target_break_even:g} can't be reached by buying at {p:g}: it must be above the buy price.")
+        n = math.ceil((c + fee_usd - x * s) / (x - p_usd) - 1e-9)
+
+    def show(d: dict) -> dict:
+        d["break_even"] = listing(d["break_even_usd"])
+        return d
+
+    plan = None
+    if n is not None:
+        plan = show(_plan(h, p_usd, n, fee_usd))
+        plan["buy_price"] = p
+        # FIFO: if you later sell just the number of shares you added, at the new break-even, the oldest lots go first.
+        extra = Lot("new", 0, today, h.stock, "", h.currency, "", n, p, h.scale, h.rate, today, fee_usd / h.rate / n if n else 0.0, "whatif")
+        hh = Holding(h.pool, h.stock, h.currency, h.sector, list(h.lots) + [extra], plan["break_even"], h.scale, h.rate, h.price_date)
+        later = sell(hh, n, today)
+        plan["sell_added_at_break_even"] = {"shares": n, "gain_usd": later.gain_usd,
+                                            "lots": [{"bought": lot["bought"], "shares": lot["shares"], "gain_usd": lot["gain_usd"]}
+                                                     for lot in later.lots]}
+    table = []
+    for d in DROPS:
+        price = h.price * (1 - d / 100)
+        row = {"drop_pct": d, "buy_price": price, "plans": []}
+        for mult in SIZES:
+            row["plans"].append(show(_plan(h, price * k, math.ceil(s * mult - 1e-9), fee_usd)) | {"multiple": mult})
+        table.append(row)
+    return {
+        "pool": h.pool, "stock": h.stock, "currency": h.currency, "pence": h.scale == 0.01, "price": h.price, "price_date": h.price_date,
+        "now": {"shares": s, "cost_usd": c, "value_usd": h.value_usd, "unrealised_usd": h.value_usd - c,
+                "break_even": listing(avg), "break_even_usd": avg, "rise_needed_pct": (avg / h.unit_usd - 1) * 100,
+                "in_loss": h.value_usd < c, "if_falls_further_usd": s * h.unit_usd * (1 - STRESS / 100) - c},
+        "plan": plan, "table": table, "stress_pct": STRESS,
+        "notes": ("Maths, not advice: buying more lowers the rise you need to break even but puts more money in one stock. "
+                  "Break-even is for the whole position (sell everything). FIFO sells your oldest, dearest shares first, so selling "
+                  "only the added shares later realises a loss even at the new break-even. Before tax; past realised gains or "
+                  "losses aren't included" + (". Non-USD: break-even prices use today's exchange rate." if h.currency != "USD" else ".")),
+    }

@@ -34,6 +34,10 @@ Names page.
 simulated trade. You cannot place orders.
 - This is information, not investment advice: don't recommend buying or selling; you may point out facts the numbers \
 show (e.g. which positions carry losses).
+- For "buy more to lower my loss / average down" questions use simulate_average_down. Show the trade-off both ways: the \
+lower break-even and smaller rise needed, AND the extra money at risk (the loss if it falls a further 20%, with vs \
+without buying). Mention that break-even is for selling the whole position and FIFO sells the oldest shares first. \
+Don't say whether the stock will recover or whether to buy; that judgement is the user's.
 - Gains use FIFO (oldest purchases sold first) and include the currency effect, like the rest of the app.
 - Be concise: lead with the answer, then a short breakdown (a small table is fine), then one line of caveats."""
 
@@ -69,6 +73,18 @@ TOOLS = [
          "by": {"type": "string", "enum": ["stock", "sector"]},
          "targets": {"type": "array", "items": _obj({"key": {"type": "string"}, "percent": {"type": "number"}}, ["key", "percent"])}},
          ["by", "targets"])},
+    {"name": "simulate_average_down", "strict": True,
+     "description": "Break-even maths for buying more of an open position (averaging down). Give the pool, optionally a buy price "
+                    "in the listing's units (null = today's price; pence for GBP), and AT MOST ONE of shares, amount_usd or "
+                    "target_break_even (all null = only the standard table). Returns the position now (break-even, rise needed), the "
+                    "plan (new break-even, money needed, rise needed, loss if it falls another 20% with vs without buying, and what "
+                    "FIFO realises if only the added shares are sold later), and a table of buy prices (today, -10/-20/-30%) by "
+                    "size (+50%, +100%, +200% of current shares).",
+     "input_schema": _obj({
+         "pool": {"type": "string", "description": "pool id from get_portfolio / find_positions"},
+         "buy_price": _null({"type": "number"}), "shares": _null({"type": "number"}),
+         "amount_usd": _null({"type": "number"}), "target_break_even": _null({"type": "number"})},
+         ["pool", "buy_price", "shares", "amount_usd", "target_break_even"])},
     {"name": "get_realised_by_year", "strict": True,
      "description": "Realised gains per calendar year (FIFO, USD): sales, gain, wins and losses.",
      "input_schema": _obj({}, [])},
@@ -105,6 +121,9 @@ def run_tool(db: Session, name: str, args: dict) -> tuple[str, bool]:
             if res.get("sale"):
                 for s in res["sale"]["sales"]:
                     s.pop("lots", None)
+        elif name == "simulate_average_down":
+            res = WS.simulate_average_down(db, args["pool"], args.get("buy_price"), args.get("shares"), args.get("amount_usd"),
+                                           args.get("target_break_even"))
         elif name == "get_realised_by_year":
             res = {"years": P.sales(db)["by_year"]}
         else:

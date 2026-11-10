@@ -193,3 +193,44 @@ def test_assistant_unexpected_client_error_is_a_message(client, monkeypatch):  #
     monkeypatch.setattr(WS, "make_client", lambda: NS(beta=NS(messages=NS(create=broken))))
     r = client.post("/api/assistant/ask", json={"question": "hi"})
     assert r.status_code == 400 and "unexpected problem (RuntimeError)" in r.json()["message"]
+
+
+# ---------------------------------------------------------------- average down
+
+def test_average_down_by_hand(client):  # noqa: F811
+    upload(client)
+    a = pools(client)["Alpha Corp"]  # 5 shares, FIFO cost 110 each (550), price 125
+    r = client.post("/api/whatif/average-down", json={"pool": a["pool"], "buy_price": 100, "shares": 5}).json()
+    assert r["now"]["break_even"] == pytest.approx(110) and not r["now"]["in_loss"]
+    p = r["plan"]  # 10 shares, cost 1050 -> break-even 105
+    assert p["break_even"] == pytest.approx(105) and p["money_usd"] == pytest.approx(500)
+    assert p["rise_needed_from_buy_pct"] == pytest.approx(5) and p["if_falls_further_usd"] == pytest.approx(10 * 80 - 1050)
+    assert p["if_falls_further_without_usd"] == pytest.approx(5 * 80 - 550)
+    # FIFO: selling 5 at 105 takes the old 110 lot -> -25
+    assert p["sell_added_at_break_even"]["gain_usd"] == pytest.approx(-25)
+    t = client.post("/api/whatif/average-down", json={"pool": a["pool"], "buy_price": 100, "target_break_even": 104}).json()
+    assert t["plan"]["shares_added"] == 8  # 5*(110-104)/(104-100) = 7.5 -> 8 whole shares
+    m = client.post("/api/whatif/average-down", json={"pool": a["pool"], "buy_price": 100, "amount_usd": 350, "fee": 10}).json()
+    assert m["plan"]["shares_added"] == 3 and m["plan"]["money_usd"] == pytest.approx(310)
+    std = client.post("/api/whatif/average-down", json={"pool": a["pool"]}).json()
+    assert std["plan"] is None and [row["drop_pct"] for row in std["table"]] == [0, 10, 20, 30]
+    assert std["table"][0]["plans"][1]["shares_added"] == 5 and std["table"][0]["buy_price"] == pytest.approx(125)
+    for bad, msg in [({"target_break_even": 120, "buy_price": 100}, "below it"), ({"target_break_even": 95, "buy_price": 100}, "above the buy price"),
+                     ({"shares": 1, "amount_usd": 10}, "not more than one"), ({"buy_price": 0}, "more than 0"), ({"amount_usd": 50, "buy_price": 100}, "one whole share")]:
+        res = client.post("/api/whatif/average-down", json={"pool": a["pool"], **bad})
+        assert res.status_code == 400 and msg in res.json()["message"], bad
+
+
+def test_assistant_average_down_tool(client, monkeypatch):  # noqa: F811
+    upload(client)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    a = pools(client)["Alpha Corp"]
+    fc = FakeClient([
+        fake_message([{"type": "tool_use", "id": "t1", "name": "simulate_average_down",
+                       "input": {"pool": a["pool"], "buy_price": 100, "shares": 5, "amount_usd": None, "target_break_even": None}}], "tool_use"),
+        fake_message([{"type": "text", "text": "Buying 5 more at 100 lowers your break-even to 105."}]),
+    ])
+    monkeypatch.setattr(WS, "make_client", lambda: fc)
+    last = client.post("/api/assistant/ask", json={"question": "average down alpha"}).json()["display"][-1]
+    assert not last["calls"][0]["error"] and last["calls"][0]["result"]["plan"]["break_even"] == 105
+    assert any(t["name"] == "simulate_average_down" for t in fc.calls[0]["tools"])
