@@ -94,11 +94,12 @@ export type SalesResp = {
 export type Lot = { buy_id: string; row: number; date: string; broker: string; shares: number; price: number; cost_local: number; cost_usd: number | null; days_held: number };
 export type Position = {
   stock: string; stock_key: string; currency: string; lots: Lot[]; shares: number; cost_local: number; cost_usd: number | null;
-  avg_cost: number | null; price: number | null; price_from_row: number | null; value_local: number | null; value_usd: number | null;
+  avg_cost: number | null; price: number | null; price_from_row: number | null; price_date: string | null; price_source: string | null;
+  pool: string; pence: boolean; value_local: number | null; value_usd: number | null;
   rate: number | null; rate_date: string | null; unrealised_usd: number | null; unrealised_pct: number | null; days_held: number | null;
   weight_pct: number | null;
 };
-export type PositionsResp = { positions: Position[]; as_of: string; price_note: string;
+export type PositionsResp = { positions: Position[]; as_of: string; sheet_as_of: string; price_note: string;
   totals: { value_usd: number; cost_usd: number; unrealised_usd: number; not_computed: number } };
 export type CheckLine = { row: number; date: string; stock: string; sheet: number | null; app: number; difference: number; match: boolean; position_rows: number[]; causes: string[] };
 export type CheckResp = {
@@ -126,26 +127,27 @@ export type Statistics = {
 export type YearRow = {
   year: number; sales: number; not_computed: number; gain_usd: number; wins: number; losses: number; cost_usd: number; proceeds_usd: number;
   avg_invested_usd: number | null; return_on_invested_pct: number | null; win_rate_pct: number | null;
-  capital_start_usd?: number; capital_added_usd?: number; return_on_capital_pct?: number | null;
+  capital_start_usd?: number; capital_added_usd?: number; return_on_capital_pct?: number | null; dividends_usd: number; income_usd: number;
 };
 export type Alloc = { label: string; value_usd: number; pct: number | null };
 export type Analysis = {
   as_of: string; statistics: Statistics; months: { month: string; sales: number; gain_usd: number; wins: number; proceeds_usd: number }[];
   years: YearRow[]; timeline: { date: string; invested_usd: number; realised_cum_usd: number }[];
   returns: {
-    realised_usd: number; unrealised_usd: number | null; total_gain_usd: number;
+    realised_usd: number; unrealised_usd: number | null; dividends_usd: number; total_gain_usd: number;
     money_in_shares: { xirr_pct: number | null; cost_of_shares_sold_usd: number; return_on_cost_sold_pct: number | null; explain: string };
     capital: null | { deposits_usd: number; withdrawals_usd: number; net_usd: number; end_value_usd: number; simple_return_pct: number | null; xirr_pct: number | null; explain: string };
   };
   allocation: { by_broker: Alloc[]; by_currency: Alloc[]; by_stock: Alloc[] };
   open: { value_usd: number; cost_usd: number; unrealised_usd: number; positions: number };
   capital_entries: number; capital_problems: string[]; review_pending: number; limits: string;
+  dividends: { total_usd: number; count: number };
 };
 export type StockRow = {
   pool: string; stock: string; stock_key: string; currency: string; buys: number; sells: number; shares_bought: number; shares_sold: number;
   bought_usd: number; realised_usd: number; realised_not_computed: number; open_shares: number; value_usd: number | null; unrealised_usd: number | null;
   first: string | null; last: string | null; avg_buy_price: number | null; avg_sell_price: number | null; total_usd: number; total_return_pct: number | null;
-  status: "open" | "closed";
+  status: "open" | "closed"; dividends_usd: number;
 };
 export type StockDetail = {
   pool: string; summary: StockRow | null; position: Position | null; as_of: string;
@@ -155,3 +157,17 @@ export type StockDetail = {
 export type CapitalFlowRow = { id: number; date: string; amount: number; currency: string; account: string | null; note: string | null; usd: number | null; rate: number | null };
 export type CashBlock = { header_row: number; title: string | null; rows: { row: number; label: string | null; original: number | null; usd: number | null }[]; totals: { row: number; label: string; usd: number }[] };
 export type CapitalResp = { flows: CapitalFlowRow[]; problems: string[]; sheet_cash: CashBlock[]; sheet_cash_note: string };
+
+// ---------------------------------------------------------------- phase 3: trades, dividends, prices
+
+export type TradeRow = {
+  id: string; kind: "buy" | "sell"; date: string; stock: string; stock_key: string; pool: string; shares: number; price: number;
+  currency: string; pence: boolean; broker: string; fee: number; source: "sheet" | "app"; row: number | null; sale_row: number | null;
+  note: string | null; gain_usd: number | null; editable: boolean; correctable: boolean; fee_stored: number | null;
+};
+export type TradesResp = { trades: TradeRow[]; stocks: string[]; stale_fees: string[]; currencies: string[]; as_of: string };
+export type DividendRow = { id: number; date: string; name: string; stock_key: string; amount: number; tax: number; currency: string; usd: number | null; note: string | null };
+export type DividendsResp = { dividends: DividendRow[]; problems: string[]; total_usd: number; by_year: { year: number; usd: number }[]; by_stock: { name: string; usd: number }[] };
+export type PriceRow = { pool: string; stock: string; currency: string; pence: boolean; shares: number; price: number | null; price_date: string | null;
+  price_source: string | null; value_usd: number | null; history: { id: number; price: number; date: string; source: string }[] };
+export type PricesResp = { prices: PriceRow[]; sheet_as_of: string; as_of: string; updated?: number; workbook_saved?: string; not_held?: string[]; no_price_in_workbook?: string[] };

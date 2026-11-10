@@ -29,7 +29,9 @@ If a port is busy, the script says which program is using it. Stop the app with 
    rate of each trade date.
 5. **Returns**: the money-weighted return of your trades; enter your dated deposits and withdrawals to also see
    your return on capital (overall and per year).
-6. **Check vs sheet**: the app's rebuilt numbers next to your sheet's own (sales-log P/L per year, open
+6. **Data ▾ Trades / Dividends / Prices**: add new trades (or correct and add fees to imported ones), record dividends,
+   and keep prices current by typing them or uploading an updated workbook (prices only; nothing else changes).
+7. **Check vs sheet**: the app's rebuilt numbers next to your sheet's own (sales-log P/L per year, open
    positions' cost and P/L), with the reason for every difference.
 
 Gains are before fees and dividends, which the sheet doesn't record. This reports what happened; it isn't advice.

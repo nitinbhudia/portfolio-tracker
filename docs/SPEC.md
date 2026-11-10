@@ -107,6 +107,9 @@ allocation by stock/broker/currency (bars, not pies).
   ending "Tot Cash"). It is shown for reference only. Return on capital uses the dated deposits and withdrawals
   you enter on the Returns page; until then the app shows the money-weighted return (XIRR) of your trades.
 
+Phase 3 adds: trades entered in the app, fees (in cost and proceeds), corrections to imported trades, dividends, and
+price updates (typed, or read from an updated workbook). See `docs/DEVELOPMENT.md`.
+
 ## 6. Tech
 
 Same setup as Fibonacci AI: Python (FastAPI, SQLAlchemy, SQLite, pandas, openpyxl) and Next.js +

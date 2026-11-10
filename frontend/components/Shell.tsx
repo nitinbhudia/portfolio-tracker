@@ -14,15 +14,22 @@ const NAV = [
   { href: "/years", label: "Per year" },
   { href: "/returns", label: "Returns" },
   { href: "/stats", label: "Statistics" },
+];
+// Entering and maintaining data: grouped under one menu.
+const DATA = [
+  { href: "/trades", label: "Trades" },
+  { href: "/dividends", label: "Dividends" },
+  { href: "/prices", label: "Prices" },
   { href: "/review", label: "Review" },
   { href: "/stocks", label: "Names" },
-  { href: "/check", label: "Check" },
+  { href: "/check", label: "Check vs sheet" },
   { href: "/import", label: "Import" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
+  const [dataOpen, setDataOpen] = useState(false);
   const [dark, setDark] = useState(false);
   const [pending, setPending] = useState(0);
 
@@ -41,7 +48,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
-  useEffect(() => setOpen(false), [path]);
+  useEffect(() => {
+    setOpen(false);
+    setDataOpen(false);
+  }, [path]);
 
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   const badge = (href: string) => href === "/review" && pending > 0 && (
@@ -52,29 +62,46 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2">
           <Link href="/" className="font-semibold tracking-tight">Portfolio Tracker</Link>
-          <nav className="hidden gap-0.5 xl:flex">
+          <nav className="hidden gap-0.5 lg:flex">
             {NAV.map((n) => (
               <Link key={n.href} href={n.href}
                 className={`rounded px-2.5 py-1.5 text-sm ${active(n.href) ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
                 {n.label}{badge(n.href)}
               </Link>
             ))}
+            <div className="relative">
+              <button aria-expanded={dataOpen} aria-haspopup="true" onClick={() => setDataOpen(!dataOpen)}
+                className={`rounded px-2.5 py-1.5 text-sm ${DATA.some((n) => active(n.href)) ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
+                Data{pending > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${pending} rows to review`}>{pending}</span>} ▾
+              </button>
+              {dataOpen && (
+                <div className="absolute left-0 top-full z-20 mt-1 flex w-48 flex-col rounded-md border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                  {DATA.map((n) => (
+                    <Link key={n.href} href={n.href} className={`rounded px-2.5 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${active(n.href) ? "font-semibold" : ""}`}>
+                      {n.label}{badge(n.href)}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           </nav>
           <div className="ml-auto flex items-center gap-2">
             <button aria-label="Toggle dark mode" onClick={() => { localStorage.setItem("theme", dark ? "light" : "dark"); setDark(!dark); }}
               className="rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-700">{dark ? "☀ Light" : "☾ Dark"}</button>
-            <button aria-label="Menu" onClick={() => setOpen(!open)} className="rounded border border-slate-300 px-2 py-1 text-xs xl:hidden dark:border-slate-700">☰</button>
+            <button aria-label="Menu" onClick={() => setOpen(!open)} className="rounded border border-slate-300 px-2 py-1 text-xs lg:hidden dark:border-slate-700">☰</button>
           </div>
         </div>
         {open && (
-          <nav className="flex flex-col border-t border-slate-200 px-4 py-2 xl:hidden dark:border-slate-800">
+          <nav className="flex flex-col border-t border-slate-200 px-4 py-2 lg:hidden dark:border-slate-800">
             {NAV.map((n) => <Link key={n.href} href={n.href} className={`rounded px-2 py-2 text-sm ${active(n.href) ? "font-semibold" : ""}`}>{n.label}{badge(n.href)}</Link>)}
+            <div className="mt-2 border-t border-slate-200 px-2 pt-2 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800">Data</div>
+            {DATA.map((n) => <Link key={n.href} href={n.href} className={`rounded px-2 py-2 text-sm ${active(n.href) ? "font-semibold" : ""}`}>{n.label}{badge(n.href)}</Link>)}
           </nav>
         )}
       </header>
       <main className="mx-auto max-w-7xl px-3 py-4 sm:px-4">{children}</main>
       <footer className="mx-auto max-w-7xl px-4 pb-8 pt-4 text-xs text-slate-500">
-        Runs on your computer; your data stays in a local database. Reports what happened, not advice. Gains are before fees and dividends (not in the sheet).
+        Runs on your computer; your data stays in a local database. Reports what happened, not advice. Fees and dividends count once entered on the Data pages.
       </footer>
     </>
   );

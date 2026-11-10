@@ -30,12 +30,13 @@ export default function Overview() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Overview</h1>
-      <p className="text-xs text-slate-500">From {s.filename} · workbook saved {fmtTimestamp(s.saved_at)} · prices as of {s.as_of}</p>
+      <p className="text-xs text-slate-500">From {s.filename} · workbook saved {fmtTimestamp(s.saved_at)} · prices as of {a?.as_of ?? s.as_of}</p>
       {s.review_pending > 0 && <Note><b>{s.review_pending} items to review</b>: those rows are not in these numbers yet. <Link className="underline" href="/review">Review them</Link>.</Note>}
       {!a ? <Loading /> : (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Stat label="Total gain" value={<Usd v={a.returns.total_gain_usd} />} sub="realised + unrealised, before fees" />
+            <Stat label="Total gain" value={<Usd v={a.returns.total_gain_usd} />}
+              sub={a.returns.dividends_usd ? <>realised + unrealised + <Usd v={a.returns.dividends_usd} /> dividends</> : "realised + unrealised"} />
             <Stat label="Realised (all years)" value={<Usd v={a.returns.realised_usd} />} sub={`${a.statistics.sales} sales · ${pct(a.statistics.win_rate_pct, 0, false)} won`} />
             <Stat label={`Realised in ${a.as_of.slice(0, 4)}`} value={<Usd v={thisYear?.gain_usd ?? 0} />} sub={`${thisYear?.sales ?? 0} sales so far`} />
             <Stat label="Open positions" value={usd(a.open.value_usd)} sub={<>{a.open.positions} stocks · unrealised <Usd v={a.open.unrealised_usd} /></>} />

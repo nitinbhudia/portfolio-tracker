@@ -62,6 +62,8 @@ class Sale:
     days_held: float | None  # share-weighted
     sheet_pl: float | None  # what the sheet recorded for this row (specific matching, own currency)
     unmatched_shares: float = 0.0
+    fee: float = 0.0
+    source: str = "sheet"
     problems: list[str] = field(default_factory=list)
 
 
@@ -79,6 +81,8 @@ class Lot:
     scale: float
     cost_rate: float | None
     cost_rate_date: date | None
+    fee_per_share: float = 0.0
+    source: str = "sheet"
 
 
 def run(trades: list[Trade], rates: Rates, sheet_pl: dict[int, float | None] | None = None) -> tuple[list[Sale], list[Lot]]:
@@ -90,13 +94,13 @@ def run(trades: list[Trade], rates: Rates, sheet_pl: dict[int, float | None] | N
         if t.kind == "buy":
             r = rates.usd(t.currency, t.date)
             q.append(Lot(t.id, t.row, t.date, t.stock, t.stock_key, t.currency, t.broker, t.shares, t.price, t.scale,
-                         r.rate if r else None, r.rate_date if r else None))
+                         r.rate if r else None, r.rate_date if r else None, (t.fee / t.shares) if t.shares else 0.0, t.source))
             continue
         need, matches = t.shares, []
         while need > EPS and q:
             lot = q[0]
             take = min(lot.shares, need)
-            cl = take * lot.price * lot.scale
+            cl = take * lot.price * lot.scale + take * lot.fee_per_share
             matches.append(Match(lot.buy_id, lot.row, lot.date, lot.broker, take, lot.price, cl,
                                  cl * lot.cost_rate if lot.cost_rate is not None else None, lot.cost_rate,
                                  lot.cost_rate_date, (t.date - lot.date).days))
@@ -105,8 +109,8 @@ def run(trades: list[Trade], rates: Rates, sheet_pl: dict[int, float | None] | N
             if lot.shares <= EPS:
                 q.popleft()
         sr = rates.usd(t.currency, t.date)
-        proceeds = t.value
-        problems = []
+        proceeds = t.value - t.fee
+        problems: list[str] = []
         if need > EPS:
             problems.append(f"Sold {need:g} more shares than were held at that date: gain not computed.")
         cost_local = sum(m.cost_local for m in matches)
@@ -119,8 +123,8 @@ def run(trades: list[Trade], rates: Rates, sheet_pl: dict[int, float | None] | N
         gain_usd = (p_usd - c_usd) if ok and not missing_fx else None
         price_eff = fx_eff = None
         if gain_usd is not None:
-            price_eff = sum(m.shares * t.scale * (t.price - m.buy_price) * sr.rate for m in matches)
             fx_eff = sum(m.cost_local * (sr.rate - m.buy_rate) for m in matches)
+            price_eff = gain_usd - fx_eff  # price change and fees, at the sale-date rate
         matched = sum(m.shares for m in matches)
         sales.append(Sale(
             id=t.id, row=t.row, sale_row=t.sale_row, date=t.date, stock=t.stock, stock_key=t.stock_key, currency=t.currency,
@@ -130,6 +134,7 @@ def run(trades: list[Trade], rates: Rates, sheet_pl: dict[int, float | None] | N
             gain_pct=(gain_usd / c_usd * 100) if gain_usd is not None and c_usd else None,
             price_effect_usd=price_eff, fx_effect_usd=fx_eff,
             days_held=(sum(m.shares * m.days_held for m in matches) / matched) if matched else None,
-            sheet_pl=sheet_pl.get(t.row), unmatched_shares=max(need, 0.0) if need > EPS else 0.0, problems=problems))
+            sheet_pl=sheet_pl.get(t.row) if t.source == "sheet" else None, unmatched_shares=max(need, 0.0) if need > EPS else 0.0,
+            problems=problems, fee=t.fee, source=t.source))
     lots = [lot for q in pools.values() for lot in q if lot.shares > EPS]
     return sales, lots

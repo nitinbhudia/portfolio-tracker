@@ -73,6 +73,54 @@ class CapitalFlow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class ManualTrade(Base):
+    """A buy or sell entered in the app (after the import, or anything the sheet doesn't have)."""
+    __tablename__ = "manual_trades"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(4))  # buy | sell
+    date: Mapped[date] = mapped_column(Date, index=True)
+    name: Mapped[str] = mapped_column(String(200))  # stock name; grouped like the sheet's names
+    shares: Mapped[float] = mapped_column(Float)
+    price: Mapped[float] = mapped_column(Float)
+    currency: Mapped[str] = mapped_column(String(3))
+    pence: Mapped[bool] = mapped_column(Boolean, default=False)
+    broker: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    fee: Mapped[float] = mapped_column(Float, default=0.0)
+    note: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class TradeFee(Base):
+    """A fee on a trade that came from the sheet, kept with the row's fingerprint (dropped if the row changes)."""
+    __tablename__ = "trade_fees"
+    trade_id: Mapped[str] = mapped_column(String(20), primary_key=True)  # B12, S40, A40, L7
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    amount: Mapped[float] = mapped_column(Float)
+
+
+class Dividend(Base):
+    __tablename__ = "dividends"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    amount: Mapped[float] = mapped_column(Float)  # received, after withholding tax
+    tax: Mapped[float] = mapped_column(Float, default=0.0)  # withholding tax, for information
+    currency: Mapped[str] = mapped_column(String(3))
+    note: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Price(Base):
+    """A current price for a stock (pool = stock group + currency), typed in or read from an updated workbook."""
+    __tablename__ = "prices"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    pool: Mapped[str] = mapped_column(String(220), index=True)
+    price: Mapped[float] = mapped_column(Float)
+    date: Mapped[date] = mapped_column(Date)
+    source: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class Setting(Base):
     __tablename__ = "settings"
     key: Mapped[str] = mapped_column(String(50), primary_key=True)

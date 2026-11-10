@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import models as m
+from app.services import entries as E
 from app.services import portfolio as P
 
 MAX_UPLOAD = 50 * 1024 * 1024
@@ -192,3 +193,114 @@ def add_capital(body: CapitalIn, db: Session = Depends(get_db)):
 @app.delete("/api/capital/{flow_id}")
 def delete_capital(flow_id: int, db: Session = Depends(get_db)):
     return P.delete_capital(db, flow_id)
+
+
+# ---------------------------------------------------------------- phase 3: trades, fees, dividends, prices
+
+class TradeIn(BaseModel):
+    kind: str
+    date: str
+    name: str
+    shares: float
+    price: float
+    currency: str
+    pence: bool = False
+    broker: str | None = None
+    fee: float = 0.0
+    note: str | None = None
+
+
+def _manual_id(trade_id: str) -> int:
+    if not (trade_id.startswith("M") and trade_id[1:].isdigit()):
+        raise P.BadRequest("only trades entered in the app (M…) can be edited or deleted; correct sheet trades instead")
+    return int(trade_id[1:])
+
+
+@app.get("/api/trades")
+def trades(db: Session = Depends(get_db)):
+    return E.trades(db)
+
+
+@app.post("/api/trades")
+def add_trade(body: TradeIn, db: Session = Depends(get_db)):
+    return E.add_trade(db, body.model_dump())
+
+
+@app.put("/api/trades/{trade_id}")
+def update_trade(trade_id: str, body: TradeIn, db: Session = Depends(get_db)):
+    return E.update_trade(db, _manual_id(trade_id), body.model_dump())
+
+
+@app.delete("/api/trades/{trade_id}")
+def delete_trade(trade_id: str, db: Session = Depends(get_db)):
+    return E.delete_trade(db, _manual_id(trade_id))
+
+
+class FeeIn(BaseModel):
+    fee: float
+
+
+@app.put("/api/trades/{trade_id}/fee")
+def set_fee(trade_id: str, body: FeeIn, db: Session = Depends(get_db)):
+    return E.set_fee(db, trade_id, body.fee)
+
+
+class CorrectIn(BaseModel):
+    fields: dict
+
+
+@app.put("/api/trades/{trade_id}/correct")
+def correct(trade_id: str, body: CorrectIn, db: Session = Depends(get_db)):
+    return E.correct(db, trade_id, body.fields)
+
+
+class DividendIn(BaseModel):
+    date: str
+    name: str
+    amount: float
+    currency: str
+    tax: float = 0.0
+    note: str | None = None
+
+
+@app.get("/api/dividends")
+def dividends(db: Session = Depends(get_db)):
+    return E.dividends(db)
+
+
+@app.post("/api/dividends")
+def add_dividend(body: DividendIn, db: Session = Depends(get_db)):
+    return E.add_dividend(db, body.model_dump())
+
+
+@app.delete("/api/dividends/{div_id}")
+def delete_dividend(div_id: int, db: Session = Depends(get_db)):
+    return E.delete_dividend(db, div_id)
+
+
+class PriceIn(BaseModel):
+    price: float
+    date: str | None = None
+
+
+@app.get("/api/prices")
+def prices(db: Session = Depends(get_db)):
+    return E.prices(db)
+
+
+@app.put("/api/prices")
+def set_price(pool: str, body: PriceIn, db: Session = Depends(get_db)):
+    return E.set_price(db, pool, body.model_dump(exclude_none=True))
+
+
+@app.delete("/api/prices/{price_id}")
+def delete_price(price_id: int, db: Session = Depends(get_db)):
+    return E.delete_price(db, price_id)
+
+
+@app.post("/api/prices/workbook")
+async def prices_from_workbook(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    data = await file.read(MAX_UPLOAD + 1)
+    if len(data) > MAX_UPLOAD:
+        raise P.BadRequest("The file is larger than 50 MB.")
+    return E.prices_from_workbook(db, file.filename or "workbook.xlsx", data)

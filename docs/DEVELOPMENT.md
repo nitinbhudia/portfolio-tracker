@@ -1,5 +1,33 @@
 # Development notes
 
+## Phase 3: trades, fees, corrections, dividends, prices (complete, awaiting approval)
+
+- **Trades entered in the app** (`manual_trades`): buys and sells in any currency (GBP optionally in pence), with broker,
+  fee and note; grouped by stock name like the sheet's names, so they join the same FIFO pool. Edit and delete.
+- **Fees**: on app trades directly; on trades from the sheet in `trade_fees` (kept with the row's fingerprint). FIFO adds a
+  purchase's fee to its cost (per share) and takes a sale's fee off its proceeds, so gains are after costs. The check
+  against the sheet ignores fees (the sheet has none).
+- **Corrections to sheet trades** (date / sale date, shares, buy or sell price, currency) are stored on the row like a
+  review decision (merged into an existing decision), kept across re-imports of the same row, dropped if the row changes.
+- **Dividends** (`dividends`): received amount after tax (tax kept for information), any currency; counted in total gain,
+  the trade XIRR (money out), return on capital, per year (dividends column; gain ÷ money in shares includes them) and per
+  stock (to the stock's main currency pool).
+- **Prices** (`prices`): type a price (dated today) or upload an updated workbook to read only the open rows' Live Price,
+  dated on its save date; trades and review decisions are untouched. The newest price per stock wins over the sheet's;
+  each position shows its price date and source; the valuation date is the newest price date.
+- **UI**: Trades (add/edit/delete, fee or correction on sheet trades), Dividends, Prices (typed + from workbook, undo);
+  the menu groups data pages under "Data ▾"; dividends and price dates appear on Overview, Positions, Per stock,
+  Per year and Returns.
+- **Tests**: 6 more backend → 37 (app trades in FIFO with fees, new stock needing a price, fees on sheet trades, corrections
+  and their survival on re-import, dividends in returns/years/per stock, typed vs older prices, prices from a workbook).
+  Browser click-tested: an app sale, a fee, a dividend, a typed price and a workbook price update; 390 px without overflow.
+
+### Decisions
+
+- **The newest price wins** (by date; on the same date, the one entered in the app), so an older typed price never
+  overrides a newer workbook.
+- **Fees are in the trade's currency** (pounds for GBP even when prices are in pence).
+
 ## Phase 2: analysis pages, returns and charts (complete, awaiting approval)
 
 - **Engine** `backend/app/engine/analytics.py`: trading statistics (win rate, average win/loss, profit factor,

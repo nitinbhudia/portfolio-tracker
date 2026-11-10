@@ -4,7 +4,7 @@ money-weighted returns (XIRR) and return on capital.
 Limits, stated wherever these numbers are shown:
 - the sheet only has *today's* prices, so past portfolio values (and the change in unrealised gain within a
   past year) can't be known: per-year figures use realised gains;
-- gains are before fees, dividends and interest (not in the sheet).
+- fees and dividends are included once entered in the app; interest isn't.
 """
 from __future__ import annotations
 
@@ -142,7 +142,8 @@ def timeline(buys: list[tuple[date, float]], sales: list[Sale], end: date) -> li
     return pts
 
 
-def years(sales: list[Sale], tl: list[Point], capital: list[tuple[date, float]] | None = None) -> list[dict]:
+def years(sales: list[Sale], tl: list[Point], capital: list[tuple[date, float]] | None = None,
+          dividends: list[tuple[date, float]] | None = None) -> list[dict]:
     """Per calendar year: realised gain, and realised gain ÷ average money invested in shares (month-ends).
     With dated deposits/withdrawals (USD, + in / − out): also realised gain ÷ (capital at the start of the year
     + money added during it), capital at start = net deposits so far + gains realised so far."""
@@ -164,13 +165,20 @@ def years(sales: list[Sale], tl: list[Point], capital: list[tuple[date, float]] 
         inv_by_year[p.date.year].append(p.invested_usd)
     for y in set(inv_by_year) - set(by):
         by[y] = {"year": y, "sales": 0, "not_computed": 0, "gain_usd": 0.0, "wins": 0, "losses": 0, "cost_usd": 0.0, "proceeds_usd": 0.0}
+    div_by_year: dict[int, float] = defaultdict(float)
+    for d, v in dividends or []:
+        div_by_year[d.year] += v
+    for y in set(div_by_year) - set(by):
+        by[y] = {"year": y, "sales": 0, "not_computed": 0, "gain_usd": 0.0, "wins": 0, "losses": 0, "cost_usd": 0.0, "proceeds_usd": 0.0}
     out = []
     realised_before = 0.0
     for y in sorted(by):
         r = by[y]
+        r["dividends_usd"] = div_by_year.get(y, 0.0)
+        r["income_usd"] = r["gain_usd"] + r["dividends_usd"]
         avg_inv = sum(inv_by_year[y]) / len(inv_by_year[y]) if inv_by_year.get(y) else None
         r["avg_invested_usd"] = avg_inv
-        r["return_on_invested_pct"] = r["gain_usd"] / avg_inv * 100 if avg_inv else None
+        r["return_on_invested_pct"] = (r["gain_usd"] + div_by_year.get(y, 0.0)) / avg_inv * 100 if avg_inv else None
         r["win_rate_pct"] = r["wins"] / (r["sales"] - r["not_computed"]) * 100 if r["sales"] - r["not_computed"] else None
         if capital:
             start = date(y, 1, 1)
@@ -179,15 +187,16 @@ def years(sales: list[Sale], tl: list[Point], capital: list[tuple[date, float]] 
             base = before + realised_before + added
             r["capital_start_usd"] = before + realised_before
             r["capital_added_usd"] = added
-            r["return_on_capital_pct"] = r["gain_usd"] / base * 100 if base > 0 else None
-        realised_before += r["gain_usd"]
+            r["return_on_capital_pct"] = r["income_usd"] / base * 100 if base > 0 else None
+        realised_before += r["income_usd"]
         out.append(r)
     return out
 
 
 # ---------------------------------------------------------------- per stock
 
-def per_stock(sales: list[Sale], lots: list[Lot], buys: list[dict], values: dict[str, dict]) -> list[dict]:
+def per_stock(sales: list[Sale], lots: list[Lot], buys: list[dict], values: dict[str, dict],
+              dividends: list[tuple[date, float, str]] | None = None) -> list[dict]:
     """buys: [{pool, stock, stock_key, currency, date, shares, price, cost_usd, row}] for every purchase in the
     results; values: pool -> {value_usd, unrealised_usd, price} from the open-positions view."""
     out: dict[str, dict] = {}
@@ -196,7 +205,7 @@ def per_stock(sales: list[Sale], lots: list[Lot], buys: list[dict], values: dict
         return out.setdefault(pool, {"pool": pool, "stock": stock, "stock_key": key, "currency": cur, "buys": 0, "sells": 0,
                                      "shares_bought": 0.0, "shares_sold": 0.0, "bought_local": 0.0, "sold_local": 0.0,
                                      "bought_usd": 0.0, "realised_usd": 0.0, "realised_not_computed": 0, "open_shares": 0.0,
-                                     "value_usd": None, "unrealised_usd": None, "first": None, "last": None})
+                                     "value_usd": None, "unrealised_usd": None, "first": None, "last": None, "dividends_usd": 0.0})
 
     for b in buys:
         e = entry(b["pool"], b["stock"], b["stock_key"], b["currency"])
@@ -219,6 +228,10 @@ def per_stock(sales: list[Sale], lots: list[Lot], buys: list[dict], values: dict
         e["last"] = max(filter(None, [e["last"], s.date]))
     for lot in lots:
         out[f"{lot.stock_key}|{lot.currency}"]["open_shares"] += lot.shares
+    for d, v, key in dividends or []:
+        pools = [k for k, e in out.items() if e["stock_key"] == key]
+        if pools:
+            out[sorted(pools, key=lambda k: -out[k]["bought_usd"])[0]]["dividends_usd"] += v
     rows = []
     for pool, e in out.items():
         v = values.get(pool)
@@ -226,7 +239,7 @@ def per_stock(sales: list[Sale], lots: list[Lot], buys: list[dict], values: dict
             e["value_usd"], e["unrealised_usd"] = v.get("value_usd"), v.get("unrealised_usd")
         e["avg_buy_price"] = e["bought_local"] / e["shares_bought"] if e["shares_bought"] else None
         e["avg_sell_price"] = e["sold_local"] / e["shares_sold"] if e["shares_sold"] else None
-        e["total_usd"] = e["realised_usd"] + (e["unrealised_usd"] or 0.0)
+        e["total_usd"] = e["realised_usd"] + (e["unrealised_usd"] or 0.0) + e["dividends_usd"]
         e["total_return_pct"] = e["total_usd"] / e["bought_usd"] * 100 if e["bought_usd"] else None
         e["status"] = "open" if e["open_shares"] > 1e-9 else "closed"
         for k in ("first", "last"):
@@ -240,22 +253,23 @@ def per_stock(sales: list[Sale], lots: list[Lot], buys: list[dict], values: dict
 # ---------------------------------------------------------------- returns
 
 def returns(buys: list[tuple[date, float]], sales: list[Sale], open_value_usd: float | None, open_cost_usd: float | None,
-            as_of: date, capital: list[tuple[date, float]] | None) -> dict:
+            as_of: date, capital: list[tuple[date, float]] | None, dividends: list[tuple[date, float]] | None = None) -> dict:
     ss = _done(sales)
     realised = sum(s.gain_usd for s in ss)
+    divs = sum(v for _, v in dividends or [])
     unreal = (open_value_usd - open_cost_usd) if open_value_usd is not None and open_cost_usd is not None else None
-    total = realised + (unreal or 0.0)
-    trade_flows = [(d, -c) for d, c in buys if c is not None] + [(s.date, s.proceeds_usd) for s in ss]
+    total = realised + (unreal or 0.0) + divs
+    trade_flows = [(d, -c) for d, c in buys if c is not None] + [(s.date, s.proceeds_usd) for s in ss] + list(dividends or [])
     if open_value_usd:
         trade_flows.append((as_of, open_value_usd))
     out = {
-        "realised_usd": realised, "unrealised_usd": unreal, "total_gain_usd": total,
+        "realised_usd": realised, "unrealised_usd": unreal, "dividends_usd": divs, "total_gain_usd": total,
         "money_in_shares": {
             "xirr_pct": _pct(xirr(trade_flows)),
             "cost_of_shares_sold_usd": sum(s.cost_usd for s in ss),
             "return_on_cost_sold_pct": realised / sum(s.cost_usd for s in ss) * 100 if ss and sum(s.cost_usd for s in ss) else None,
-            "explain": "Money-weighted annual return of your trades: every purchase is money in, every sale money out, and the "
-                       "open positions count at today's value. Cash waiting in your accounts isn't included.",
+            "explain": "Money-weighted annual return of your trades: every purchase is money in, every sale and dividend money "
+                       "out, and the open positions count at today's value. Cash waiting in your accounts isn't included.",
         },
         "capital": None,
     }

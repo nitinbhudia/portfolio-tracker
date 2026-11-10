@@ -31,13 +31,13 @@ export default function YearsPage() {
         <Columns label="Realised gain per year" fmt={(v) => usd(v)} data={ys.map((y) => ({ key: String(y.year), label: String(y.year), value: y.gain_usd }))} />
         <div className="mt-3 overflow-x-auto">
           <table className="tbl num w-full text-sm">
-            <thead><tr><th>Year</th><th className="text-right">Sales</th><th className="text-right">Won</th><th className="text-right">Realised gain</th>
-              <th className="text-right">Cost of shares sold</th><th className="text-right">Avg money in shares</th><th className="text-right" title="Realised gain ÷ average money invested in shares (month-ends)">Realised ÷ money in shares</th>
+            <thead><tr><th>Year</th><th className="text-right">Sales</th><th className="text-right">Won</th><th className="text-right">Realised gain</th><th className="text-right">Dividends</th>
+              <th className="text-right">Cost of shares sold</th><th className="text-right">Avg money in shares</th><th className="text-right" title="(Realised gain + dividends) ÷ average money invested in shares (month-ends)">Gain ÷ money in shares</th>
               {cap && <th className="text-right" title="Realised gain ÷ (capital at the start of the year + money added during it)">Return on capital</th>}</tr></thead>
             <tbody>{a.years.map((y) => (
               <tr key={y.year} className={y.year === sel ? "bg-slate-50 dark:bg-slate-800/50" : ""}>
                 <td><button className="underline" onClick={() => setYear(y.year)}>{y.year}</button></td><td className="text-right">{y.sales}</td>
-                <td className="text-right">{pct(y.win_rate_pct, 0, false)}</td><td className="text-right font-medium"><Usd v={y.gain_usd} /></td>
+                <td className="text-right">{pct(y.win_rate_pct, 0, false)}</td><td className="text-right font-medium"><Usd v={y.gain_usd} /></td><td className="text-right">{y.dividends_usd ? usd(y.dividends_usd) : ""}</td>
                 <td className="text-right">{usd(y.cost_usd)}</td><td className="text-right">{usd(y.avg_invested_usd)}</td>
                 <td className="text-right"><Pct v={y.return_on_invested_pct} /></td>{cap && <td className="text-right"><Pct v={y.return_on_capital_pct} /></td>}</tr>
             ))}</tbody>

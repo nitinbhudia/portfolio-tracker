@@ -160,11 +160,21 @@ def state(db: Session) -> dict | None:
         elif d.key in fps:
             stale.append(d.key)
     groups, gnames, tickers = _groups(db)
-    rb = R.rebuild(wb, decisions, groups, gnames)
+    manual = [{"id": t.id, "kind": t.kind, "date": t.date, "name": t.name, "shares": t.shares, "price": t.price,
+               "currency": t.currency, "pence": t.pence, "broker": t.broker, "fee": t.fee, "note": t.note}
+              for t in db.scalars(select(m.ManualTrade).order_by(m.ManualTrade.date, m.ManualTrade.id))]
+    fees, stale_fees = {}, []
+    for f in db.scalars(select(m.TradeFee)):
+        if fps.get(f"P{f.trade_id[1:]}") == f.fingerprint:
+            fees[f.trade_id] = f.amount
+        else:
+            stale_fees.append(f.trade_id)
+    rb = R.rebuild(wb, decisions, groups, gnames, manual, fees)
     rt = rates(db)
     sales, lots = FIFO.run(rb.trades, rt, {p.row: p.pl for p in wb.positions})
     st = {"import_id": imp.id, "import": imp, "wb": wb, "rb": rb, "rates": rt, "sales": sales, "lots": lots,
-          "decisions": decisions, "stale_decisions": stale, "tickers": tickers, "fingerprints": fps}
+          "decisions": decisions, "stale_decisions": stale, "tickers": tickers, "fingerprints": fps,
+          "stale_fees": stale_fees, "groups": groups}
     _cache["state"] = st
     return st
 
@@ -192,7 +202,8 @@ def status(db: Session) -> dict:
         "as_of": as_of(st).isoformat(), "sheet": wb.sheet_name, "sha256": imp.sha256,
         "position_rows": list(wb.position_rows), "sales_rows": list(wb.sales_rows) if wb.sales_rows else None,
         "accounting": rb.accounting, "review_pending": sum(pending.values()), "review_by_kind": dict(pending),
-        "trades": len(rb.trades), "stale_decisions": st["stale_decisions"], "fx": _get(db, "fx_last"),
+        "trades": len(rb.trades), "stale_decisions": st["stale_decisions"], "stale_fees": st["stale_fees"],
+        "app_trades": sum(1 for t in rb.trades if t.source == "app"), "fx": _get(db, "fx_last"),
         "fx_latest": st["rates"].latest_date().isoformat() if st["rates"].latest_date() else None,
     }
 
@@ -418,24 +429,39 @@ def sales(db: Session, year: int | None = None) -> dict:
             "as_of": as_of(st).isoformat(), "method": "FIFO per stock and currency, across brokers; USD at the ECB rate of each trade date"}
 
 
+def current_prices(db: Session, st) -> dict[str, dict]:
+    """pool -> {price, date, source}: the newest of the sheet's Live Price (open rows, workbook save date) and
+    prices entered in the app or read from an updated workbook."""
+    ref = as_of(st)
+    out: dict[str, dict] = {}
+    for t in st["rb"].trades:
+        if t.kind != "buy" or t.source != "sheet":
+            continue
+        p = st["rb"].position_by_row.get(t.row)
+        if p is not None and p.live_price is not None and p.status == "open":
+            cur = out.get(t.pool)
+            if cur is None or p.row > cur["row"]:
+                out[t.pool] = {"price": p.live_price, "date": ref, "source": f"sheet (row {p.row})", "row": p.row}
+    for pr in db.scalars(select(m.Price).order_by(m.Price.date, m.Price.id)):
+        cur = out.get(pr.pool)
+        if cur is None or pr.date >= cur["date"]:
+            out[pr.pool] = {"price": pr.price, "date": pr.date, "source": pr.source, "row": None, "id": pr.id}
+    return out
+
+
 def positions(db: Session) -> dict:
     st = _need(db)
-    wb, rt = st["wb"], st["rates"]
+    rt = st["rates"]
     ref = as_of(st)
-    live: dict[str, tuple[int, float]] = {}
-    for t in st["rb"].trades:
-        p = st["rb"].position_by_row[t.row]
-        if t.kind == "buy" and p.live_price is not None and p.status == "open":
-            if t.pool not in live or p.row > live[t.pool][0]:
-                live[t.pool] = (p.row, p.live_price)
+    prices = current_prices(db, st)
     pools: dict[str, dict] = {}
     for lot in st["lots"]:
         pool = f"{lot.stock_key}|{lot.currency}"
         g = pools.setdefault(pool, {"stock": lot.stock, "stock_key": lot.stock_key, "currency": lot.currency, "lots": [],
                                     "shares": 0.0, "cost_local": 0.0, "cost_usd": 0.0, "cost_usd_missing": False})
-        cl = lot.shares * lot.price * lot.scale
+        cl = lot.shares * lot.price * lot.scale + lot.shares * lot.fee_per_share
         g["lots"].append({"buy_id": lot.buy_id, "row": lot.row, "date": lot.date.isoformat(), "broker": lot.broker,
-                          "shares": lot.shares, "price": lot.price, "cost_local": cl,
+                          "shares": lot.shares, "price": lot.price, "cost_local": cl, "source": lot.source,
                           "cost_usd": cl * lot.cost_rate if lot.cost_rate is not None else None,
                           "days_held": (ref - lot.date).days})
         g["shares"] += lot.shares
@@ -447,16 +473,18 @@ def positions(db: Session) -> dict:
         g["scale"] = lot.scale
     out = []
     for pool, g in pools.items():
-        px = live.get(pool)
-        price = px[1] if px else None
-        rate = rt.usd(g["currency"], ref)
+        px = prices.get(pool)
+        price = px["price"] if px else None
+        pdate = px["date"] if px else ref
+        rate = rt.usd(g["currency"], pdate)
         value_local = g["shares"] * price * g["scale"] if price is not None else None
         value_usd = value_local * rate.rate if value_local is not None and rate else None
         cost_usd = None if g["cost_usd_missing"] else g["cost_usd"]
         unreal = value_usd - cost_usd if value_usd is not None and cost_usd is not None else None
-        out.append({**{k: v for k, v in g.items() if k not in ("cost_usd_missing", "scale")}, "cost_usd": cost_usd,
+        out.append({**{k: v for k, v in g.items() if k not in ("cost_usd_missing", "scale")}, "pool": pool, "cost_usd": cost_usd,
                     "avg_cost": g["cost_local"] / (g["shares"] * g["scale"]) if g["shares"] else None,
-                    "price": price, "price_from_row": px[0] if px else None, "value_local": value_local,
+                    "price": price, "price_from_row": px["row"] if px else None, "price_date": pdate.isoformat() if px else None,
+                    "price_source": px["source"] if px else None, "pence": g["scale"] == 0.01, "value_local": value_local,
                     "value_usd": value_usd, "rate": rate.rate if rate else None,
                     "rate_date": rate.rate_date.isoformat() if rate and rate.rate_date else None,
                     "unrealised_usd": unreal, "unrealised_pct": unreal / cost_usd * 100 if unreal is not None and cost_usd else None,
@@ -466,10 +494,13 @@ def positions(db: Session) -> dict:
         x["weight_pct"] = x["value_usd"] / tot_v * 100 if x["value_usd"] is not None and tot_v else None
     out.sort(key=lambda x: -(x["value_usd"] or 0))
     computed = [x for x in out if x["unrealised_usd"] is not None]
-    return {"positions": out, "as_of": ref.isoformat(),
+    dates = sorted({x["price_date"] for x in out if x["price_date"]})
+    valued = date.fromisoformat(dates[-1]) if dates else ref
+    return {"positions": out, "as_of": valued.isoformat(), "sheet_as_of": ref.isoformat(),
             "totals": {"value_usd": tot_v, "cost_usd": sum(x["cost_usd"] for x in computed),
                        "unrealised_usd": sum(x["unrealised_usd"] for x in computed), "not_computed": len(out) - len(computed)},
-            "price_note": "Prices are the Live Price saved in your workbook on " + ref.isoformat() + "."}
+            "price_note": (f"Prices: the Live Price saved in your workbook on {ref.isoformat()}, unless a newer price was entered on "
+                           "the Prices page (each position shows its price date and source).")}
 
 
 def check(db: Session) -> dict:
@@ -480,8 +511,8 @@ def check(db: Session) -> dict:
 # ---------------------------------------------------------------- phase 2: analysis
 
 LIMITS = ("Your sheet only has today's prices, so what the portfolio was worth on past dates isn't known: per-year "
-          "figures use realised gains. Gains are before fees, dividends and interest, which the sheet doesn't record. "
-          "Rows still on the Review page are left out.")
+          "figures use realised gains (and dividends). Fees and dividends count once entered in the app (the sheet doesn't "
+          "record them); interest isn't included. Rows still on the Review page are left out.")
 
 
 def _buys(st) -> list[dict]:
@@ -577,7 +608,10 @@ def analysis(db: Session) -> dict:
     buys = _buys(st)
     pos = positions(db)
     flows, cap_usd, problems = capital_flows(db, st)
-    ref = as_of(st)
+    from .entries import dividend_list
+    _, divs, div_problems = dividend_list(db, st)
+    problems = problems + div_problems
+    ref = date.fromisoformat(pos["as_of"])
     buy_flows = [(b["date"], b["cost_usd"]) for b in buys]
     tl = AN.timeline(buy_flows, sales, ref)
     t = pos["totals"]
@@ -599,9 +633,11 @@ def analysis(db: Session) -> dict:
         "as_of": ref.isoformat(),
         "statistics": AN.statistics(sales),
         "months": AN.months(sales),
-        "years": AN.years(sales, tl, cap_usd or None),
+        "years": AN.years(sales, tl, cap_usd or None, [(d, v) for d, v, _ in divs]),
         "timeline": [{"date": p.date.isoformat(), "invested_usd": p.invested_usd, "realised_cum_usd": p.realised_cum_usd} for p in tl],
-        "returns": AN.returns(buy_flows, sales, t["value_usd"], t["cost_usd"] if not t["not_computed"] else None, ref, cap_usd or None),
+        "returns": AN.returns(buy_flows, sales, t["value_usd"], t["cost_usd"] if not t["not_computed"] else None, ref, cap_usd or None,
+                              [(d, v) for d, v, _ in divs]),
+        "dividends": {"total_usd": sum(v for _, v, _ in divs), "count": len(divs)},
         "allocation": {"by_broker": alloc(by_broker), "by_currency": alloc(by_cur),
                        "by_stock": [{"label": p["stock"] + (f" ({p['currency']})" if p["currency"] != "USD" else ""),
                                      "value_usd": p["value_usd"], "pct": p["weight_pct"]} for p in pos["positions"] if p["value_usd"] is not None]},
@@ -617,7 +653,9 @@ def by_stock(db: Session) -> dict:
     st = _need(db)
     pos = positions(db)
     values = {f"{p['stock_key']}|{p['currency']}": p for p in pos["positions"]}
-    rows = AN.per_stock(st["sales"], st["lots"], _buys(st), values)
+    from .entries import dividend_list
+    _, divs, _ = dividend_list(db, st)
+    rows = AN.per_stock(st["sales"], st["lots"], _buys(st), values, divs)
     return {"stocks": rows, "as_of": as_of(st).isoformat(), "limits": LIMITS}
 
 
