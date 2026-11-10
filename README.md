@@ -11,6 +11,16 @@ Specification: [`docs/SPEC.md`](docs/SPEC.md). Development notes: [`docs/DEVELOP
 
 Needs Python 3.11+ and Node.js 20+ (`brew install python@3.12 node@22`).
 
+**Double-click `Start Portfolio Tracker.command`** in the app's folder (Finder). It opens a Terminal window, starts the
+app and opens it in your browser when it's ready; keep that window open while you use the app, and press Ctrl-C (or
+close the window) to stop it. Drag the file to the Dock for one-click starts. If the app is already running, it just
+opens it.
+
+The first time only, macOS may say the file "cannot be opened because it is from an unidentified developer" (it came
+in a download): right-click it, choose **Open**, then **Open** again.
+
+Or from Terminal, in the app's folder:
+
 ```bash
 ./scripts/dev.sh
 ```
