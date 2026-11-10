@@ -32,9 +32,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [dataOpen, setDataOpen] = useState(false);
   const [dark, setDark] = useState(false);
   const [pending, setPending] = useState(0);
+  // null = not known yet; pages only load (and ask the backend for results) once an import exists
+  const [imported, setImported] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const load = () => apiFetch<Status>("/api/status").then((s) => setPending(s.imported ? s.review_pending : 0)).catch(() => {});
+    const load = () => apiFetch<Status>("/api/status")
+      .then((s) => { setPending(s.imported ? s.review_pending : 0); setImported(s.imported); })
+      .catch(() => setImported(true)); // backend unreachable: let the page show its own error
     load();
     window.addEventListener(STATUS_EVENT, load);
     return () => window.removeEventListener(STATUS_EVENT, load);
@@ -99,7 +103,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </nav>
         )}
       </header>
-      <main className="mx-auto max-w-7xl px-3 py-4 sm:px-4">{children}</main>
+      <main className="mx-auto max-w-7xl px-3 py-4 sm:px-4">
+        {imported === null && !path.startsWith("/import") ? (
+          <div role="status" className="p-6 text-sm text-slate-500">Loading…</div>
+        ) : imported === false && !path.startsWith("/import") ? (
+          <div className="mx-auto max-w-xl space-y-4 py-10 text-center">
+            <h1 className="text-2xl font-semibold">Nothing imported yet</h1>
+            <p className="text-slate-600 dark:text-slate-300">Import your workbook&apos;s Live Portfolio tab first. The results pages fill in from it.
+              (Each copy of the app has its own database: a fresh download starts empty.)</p>
+            <Link href="/import" className="inline-block rounded bg-slate-900 px-3 py-1.5 text-sm text-white dark:bg-slate-100 dark:text-slate-900">Import workbook</Link>
+          </div>
+        ) : children}
+      </main>
       <footer className="mx-auto max-w-7xl px-4 pb-8 pt-4 text-xs text-slate-500">
         Runs on your computer; your data stays in a local database. Reports what happened, not advice. Fees and dividends count once entered on the Data pages.
       </footer>
