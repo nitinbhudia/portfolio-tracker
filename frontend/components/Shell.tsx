@@ -17,6 +17,8 @@ const NAV = [
   { href: "/returns", label: "Returns" },
   { href: "/stats", label: "Statistics" },
   { href: "/indexes", label: "vs Indexes" },
+  { href: "/whatif", label: "What-if" },
+  { href: "/ask", label: "Ask" },
 ];
 // Entering and maintaining data: grouped under one menu.
 const DATA = [

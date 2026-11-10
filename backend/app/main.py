@@ -9,10 +9,16 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.db import models as m
-from app.services import benchmarks as BMS
-from app.services import entries as E
-from app.services import portfolio as P
+from app.core_env import load_env
+
+load_env()  # .env in the app folder (git-ignored): ANTHROPIC_API_KEY for the assistant
+
+from app.db import models as m  # noqa: E402
+from app.services import benchmarks as BMS  # noqa: E402
+from app.services import entries as E  # noqa: E402
+from app.services import assistant as AS  # noqa: E402
+from app.services import portfolio as P  # noqa: E402
+from app.services import whatif as WS  # noqa: E402
 
 MAX_UPLOAD = 50 * 1024 * 1024
 
@@ -345,3 +351,85 @@ class SymbolIn(BaseModel):
 @app.put("/api/benchmarks/{index_id}")
 def benchmarks_symbol(index_id: str, body: SymbolIn, db: Session = Depends(get_db)):
     return BMS.set_symbol(db, index_id, body.symbol, body.source)
+
+
+# ---------------------------------------------------------------- what-if, sectors, assistant
+
+@app.get("/api/whatif")
+def whatif_overview(db: Session = Depends(get_db)):
+    return WS.overview(db)
+
+
+class SaleItem(BaseModel):
+    pool: str
+    shares: float | None = None
+    percent: float | None = None
+
+
+class SaleIn(BaseModel):
+    items: list[SaleItem] | None = None
+    sector: str | None = None
+    everything: bool = False
+    percent: float | None = None
+    fee_per_sale: float = 0.0
+
+
+@app.post("/api/whatif/sell")
+def whatif_sell(body: SaleIn, db: Session = Depends(get_db)):
+    return WS.simulate_sale(db, [i.model_dump() for i in body.items] if body.items else None, body.sector, body.everything,
+                            body.percent, body.fee_per_sale)
+
+
+class RebalanceIn(BaseModel):
+    by: str
+    targets: dict[str, float]
+    whole_shares: bool = True
+
+
+@app.post("/api/whatif/rebalance")
+def whatif_rebalance(body: RebalanceIn, db: Session = Depends(get_db)):
+    return WS.simulate_rebalance(db, body.by, body.targets, body.whole_shares)
+
+
+@app.get("/api/sectors")
+def sectors(db: Session = Depends(get_db)):
+    return WS.sectors(db)
+
+
+class SectorIn(BaseModel):
+    sector: str | None
+
+
+@app.put("/api/sectors/{group_key}")
+def set_sector(group_key: str, body: SectorIn, db: Session = Depends(get_db)):
+    return WS.set_sector(db, group_key, body.sector)
+
+
+@app.post("/api/sectors/confirm-all")
+def confirm_sectors(db: Session = Depends(get_db)):
+    return WS.confirm_all(db)
+
+
+@app.post("/api/sectors/suggest")
+def suggest_sectors(db: Session = Depends(get_db)):
+    return WS.suggest_sectors(db)
+
+
+@app.get("/api/assistant/status")
+def assistant_status():
+    return AS.status()
+
+
+class AskIn(BaseModel):
+    question: str
+    chat_id: int | None = None
+
+
+@app.post("/api/assistant/ask")
+def assistant_ask(body: AskIn, db: Session = Depends(get_db)):
+    return AS.ask(db, body.question, body.chat_id)
+
+
+@app.get("/api/assistant/chats/{chat_id}")
+def assistant_chat(chat_id: int, db: Session = Depends(get_db)):
+    return AS.get_chat(db, chat_id)
