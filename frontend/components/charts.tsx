@@ -96,19 +96,24 @@ export function Columns({ data, height = 220, fmt, label }: {
 
 /** Lines over time, one shared USD axis; crosshair snaps to the nearest date and lists every series. */
 export function Lines({ dates, series, height = 240, fmt, label }: {
-  dates: string[]; series: { name: string; color: string; values: number[] }[]; height?: number; fmt: (v: number) => string; label: string;
+  dates: string[]; series: { name: string; color: string; values: (number | null)[] }[]; height?: number; fmt: (v: number) => string; label: string;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const W = useWidth(wrap);
   const [idx, setIdx] = useState<number | null>(null);
-  const all = series.flatMap((s) => s.values);
+  const all = series.flatMap((s) => s.values.filter((v): v is number => v !== null));
   const ticks = useMemo(() => niceTicks(Math.min(0, ...all), Math.max(0, ...all)), [all]);
   const compact = useCompact(ticks);
   const lo = ticks[0], hi = ticks[ticks.length - 1];
   const H = height, iw = W - PAD.l - PAD.r - 8, ih = H - PAD.t - PAD.b;
   const x = (i: number) => PAD.l + (dates.length > 1 ? (i / (dates.length - 1)) * iw : iw / 2);
   const y = (v: number) => PAD.t + ((hi - v) / (hi - lo || 1)) * ih;
-  const years = dates.map((d, i) => [d.slice(0, 4), i] as const).filter(([yr], i, a) => i === 0 || a[i - 1][0] !== yr);
+  const firsts = dates.map((d, i) => [d.slice(0, 4), i] as const).filter(([yr], i, a) => i === 0 || a[i - 1][0] !== yr);
+  const years: (readonly [string, number])[] = [];
+  for (const f of firsts) {  // skip a year label that would overlap the previous one
+    const prev = years[years.length - 1];
+    if (!prev || (f[1] - prev[1]) / Math.max(1, dates.length - 1) * (W - PAD.l - PAD.r - 8) >= 34) years.push(f);
+  }
   const onMove = (e: React.PointerEvent) => {
     const box = wrap.current!.getBoundingClientRect();
     const px = e.clientX - box.left;
@@ -125,23 +130,32 @@ export function Lines({ dates, series, height = 240, fmt, label }: {
           </g>
         ))}
         {years.map(([yr, i]) => <text key={yr} x={x(i)} y={H - 8} fontSize={10} fill="var(--viz-muted)">{yr}</text>)}
-        {series.map((s) => (
-          <g key={s.name}>
-            <polyline points={s.values.map((v, i) => `${x(i)},${y(v)}`).join(" ")} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-            <circle cx={x(s.values.length - 1)} cy={y(s.values[s.values.length - 1])} r={4} fill={s.color} stroke="var(--viz-surface)" strokeWidth={2} />
-          </g>
-        ))}
+        {series.map((s) => {
+          let d = "", pen = false;
+          s.values.forEach((v, i) => {
+            if (v === null) { pen = false; return; }
+            d += `${pen ? "L" : "M"}${x(i)},${y(v)} `;
+            pen = true;
+          });
+          const li = s.values.map((v, i) => (v === null ? -1 : i)).filter((i) => i >= 0).pop();
+          return (
+            <g key={s.name}>
+              <path d={d} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+              {li !== undefined && <circle cx={x(li)} cy={y(s.values[li] as number)} r={4} fill={s.color} stroke="var(--viz-surface)" strokeWidth={2} />}
+            </g>
+          );
+        })}
         {idx !== null && <line x1={x(idx)} x2={x(idx)} y1={PAD.t} y2={PAD.t + ih} stroke="var(--viz-axis)" strokeWidth={1} />}
-        {idx !== null && series.map((s) => <circle key={s.name} cx={x(idx)} cy={y(s.values[idx])} r={4} fill={s.color} stroke="var(--viz-surface)" strokeWidth={2} />)}
+        {idx !== null && series.map((s) => s.values[idx] === null ? null : <circle key={s.name} cx={x(idx)} cy={y(s.values[idx] as number)} r={4} fill={s.color} stroke="var(--viz-surface)" strokeWidth={2} />)}
       </svg>
       <div className="mt-1 flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-300">
         {series.map((s) => (
           <span key={s.name} className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-4 rounded" style={{ background: s.color }} />{s.name}:{" "}
-            <b className="num">{fmt(s.values[s.values.length - 1])}</b></span>
+            <b className="num">{(() => { const v = [...s.values].reverse().find((z) => z !== null); return v == null ? "—" : fmt(v); })()}</b></span>
         ))}
       </div>
       {idx !== null && (
-        <Tooltip tip={{ x: Math.min(Math.max(x(idx), 80), W - 80), y: PAD.t + 16, lines: [[dates[idx], ""], ...series.map((s) => [s.name, fmt(s.values[idx])] as [string, string])] }} />
+        <Tooltip tip={{ x: Math.min(Math.max(x(idx), 80), W - 80), y: PAD.t + 16, lines: [[dates[idx], ""], ...series.map((s) => [s.name, s.values[idx] === null ? "—" : fmt(s.values[idx] as number)] as [string, string])] }} />
       )}
     </div>
   );

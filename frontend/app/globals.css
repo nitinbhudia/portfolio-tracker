@@ -23,3 +23,5 @@ body { @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 a
   --viz-surface: #0f172a; --viz-grid: #2c2c2a; --viz-axis: #383835; --viz-muted: #898781; --viz-ink: #f0efec; --viz-ink2: #c3c2b7;
   --viz-1: #3987e5; --viz-2: #d95926; --viz-neg: #e66767;
 }
+:root { --viz-3: #1baf7a; --viz-4: #eda100; --viz-5: #e87ba4; }
+.dark { --viz-3: #199e70; --viz-4: #c98500; --viz-5: #d55181; }
