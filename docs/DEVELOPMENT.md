@@ -1,5 +1,23 @@
 # Development notes
 
+## Index comparison and chart time ranges
+
+- **Index data** (`index_prices`): daily closes for S&P 500 (`^spx`), Nasdaq Composite (`^ndq`), Nasdaq-100 (`^ndx`),
+  Russell 2000 (`^rut`) and FTSE 100 (`^ukx`) from Stooq's free CSV download, or a CSV you upload (Date + Close). The
+  Stooq symbol of each index can be changed on the page. Stooq refuses connections from the cloud environment this was
+  built in, so the live download is untested there; parsing, the fetch (simulated) and every calculation are tested.
+- **Comparisons** (`engine/benchmarks.py`): your portfolio's day-by-day value is unknown (no price history for your
+  stocks), so the comparison uses your trades: (1) per sale, each FIFO purchase replayed in the index from purchase date to
+  sale date with the same dollars (and open lots to the latest price date); (2) all time, every purchase buys the index and
+  every sale sells the same dollar amount, XIRR on identical cash flows (reported as "ran out" if a sale takes more than the
+  index holding is worth); (3) each index's change over the period. Index levels are converted to USD at the ECB rate of the
+  day (FTSE 100). Price indexes exclude dividends, as do your gains unless entered.
+- **Time ranges**: one range for every chart (presets or custom dates, remembered on this computer): Overview and Per year
+  bars switch to months for periods up to 2 years; the money-in-shares line and both index charts follow the range.
+- **Tests**: 9 more backend (CSV formats and errors, Stooq fetch and "no data", USD conversion and stale gaps, refresh and
+  failures keeping earlier data, upload, per-trade comparison by hand, "ran out", periods and validation) → 46; frontend
+  range and period helpers. Browser-checked with made-up index CSVs uploaded through the page, desktop and 390 px.
+
 ## Phase 3: trades, fees, corrections, dividends, prices (complete, awaiting approval)
 
 - **Trades entered in the app** (`manual_trades`): buys and sells in any currency (GBP optionally in pence), with broker,

@@ -171,3 +171,26 @@ export type DividendsResp = { dividends: DividendRow[]; problems: string[]; tota
 export type PriceRow = { pool: string; stock: string; currency: string; pence: boolean; shares: number; price: number | null; price_date: string | null;
   price_source: string | null; value_usd: number | null; history: { id: number; price: number; date: string; source: string }[] };
 export type PricesResp = { prices: PriceRow[]; sheet_as_of: string; as_of: string; updated?: number; workbook_saved?: string; not_held?: string[]; no_price_in_workbook?: string[] };
+
+// ---------------------------------------------------------------- index comparison
+
+export type IndexStatus = { id: string; name: string; symbol: string; currency: string; points: number; first: string | null; last: string | null };
+export type IndexCompare = {
+  realised: { sales: number; compared: number; cost_usd: number; gain_usd: number; index_gain_usd: number; beat: number; not_compared: number };
+  open: null | { lots: number; compared: number; cost_usd: number; index_gain_usd: number; not_compared: number };
+};
+export type IndexRow = {
+  id: string; name: string; currency: string; available: boolean; change_pct?: number | null; change_usd_pct?: number | null;
+  from?: string | null; to?: string | null; compare?: IndexCompare;
+  same_money?: null | { index_end_value_usd: number | null; your_end_value_usd: number | null; index_xirr_pct: number | null; your_xirr_pct: number | null;
+    trades_not_priced: number; ran_out: string | null };
+};
+export type BenchmarksResp = {
+  period: { start: string; end: string; all_time: boolean; first_trade: string; valuation: string };
+  indexes: IndexRow[]; status: IndexStatus[];
+  index_chart: { dates: string[]; lines: Record<string, (number | null)[]> };
+  cumulative: { dates: string[]; yours: number[]; index: Record<string, number[]> };
+  open: null | { unrealised_usd: number; value_usd: number };
+  note: string; review_pending: number;
+};
+export type RefreshResp = { results: { id: string; ok: boolean; points?: number; last?: string; message?: string }[]; indexes: IndexStatus[] };

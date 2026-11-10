@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 
 import { apiFetch, type Status, STATUS_EVENT } from "@/lib/api";
 
+import { RangeProvider } from "./RangePicker";
+
 const NAV = [
   { href: "/", label: "Overview" },
   { href: "/positions", label: "Positions" },
@@ -14,6 +16,7 @@ const NAV = [
   { href: "/years", label: "Per year" },
   { href: "/returns", label: "Returns" },
   { href: "/stats", label: "Statistics" },
+  { href: "/indexes", label: "vs Indexes" },
 ];
 // Entering and maintaining data: grouped under one menu.
 const DATA = [
@@ -62,7 +65,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${pending} rows to review`}>{pending}</span>
   );
   return (
-    <>
+    <RangeProvider>
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2">
           <Link href="/" className="font-semibold tracking-tight">Portfolio Tracker</Link>
@@ -118,6 +121,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <footer className="mx-auto max-w-7xl px-4 pb-8 pt-4 text-xs text-slate-500">
         Runs on your computer; your data stays in a local database. Reports what happened, not advice. Fees and dividends count once entered on the Data pages.
       </footer>
-    </>
+    </RangeProvider>
   );
 }

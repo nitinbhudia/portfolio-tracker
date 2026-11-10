@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import models as m
+from app.services import benchmarks as BMS
 from app.services import entries as E
 from app.services import portfolio as P
 
@@ -304,3 +305,37 @@ async def prices_from_workbook(file: UploadFile = File(...), db: Session = Depen
     if len(data) > MAX_UPLOAD:
         raise P.BadRequest("The file is larger than 50 MB.")
     return E.prices_from_workbook(db, file.filename or "workbook.xlsx", data)
+
+
+# ---------------------------------------------------------------- index comparison
+
+@app.get("/api/benchmarks")
+def benchmarks(start: str | None = None, end: str | None = None, range: str | None = None, db: Session = Depends(get_db)):  # noqa: A002
+    return BMS.view(db, start, end, range)
+
+
+@app.get("/api/benchmarks/status")
+def benchmarks_status(db: Session = Depends(get_db)):
+    return {"indexes": BMS.status(db)}
+
+
+@app.post("/api/benchmarks/refresh")
+def benchmarks_refresh(db: Session = Depends(get_db)):
+    return BMS.refresh(db)
+
+
+@app.post("/api/benchmarks/{index_id}/upload")
+async def benchmarks_upload(index_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    data = await file.read(10 * 1024 * 1024 + 1)
+    if len(data) > 10 * 1024 * 1024:
+        raise P.BadRequest("The file is larger than 10 MB.")
+    return BMS.upload(db, index_id, data)
+
+
+class SymbolIn(BaseModel):
+    symbol: str
+
+
+@app.put("/api/benchmarks/{index_id}")
+def benchmarks_symbol(index_id: str, body: SymbolIn, db: Session = Depends(get_db)):
+    return BMS.set_symbol(db, index_id, body.symbol)

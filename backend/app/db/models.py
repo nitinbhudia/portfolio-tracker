@@ -133,3 +133,11 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 def init_db(eng=None) -> None:
     Base.metadata.create_all(eng or engine)
+
+
+class IndexPrice(Base):
+    """Daily close of a benchmark index (in the index's own currency)."""
+    __tablename__ = "index_prices"
+    index_id: Mapped[str] = mapped_column(String(10), primary_key=True)
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    close: Mapped[float] = mapped_column(Float)

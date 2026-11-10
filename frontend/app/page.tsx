@@ -3,15 +3,19 @@
 import Link from "next/link";
 
 import { Columns, Lines, RankedBars } from "@/components/charts";
+import { RangePicker, useRange } from "@/components/RangePicker";
 import { ErrorBox, Loading, Note, Pct, Section, Stat, Usd, btnPrimary } from "@/components/ui";
 import { type Analysis, type CheckResp, type Status, useApi } from "@/lib/api";
 import { fmtTimestamp, num, pct, usd } from "@/lib/format";
+import { gainBars } from "@/lib/periods";
+import { inRange, label, resolve } from "@/lib/range";
 
 export default function Overview() {
   const st = useApi<Status>("/api/status");
   const imported = st.data?.imported === true;
   const an = useApi<Analysis>(imported ? "/api/analysis" : null);
   const chk = useApi<CheckResp>(imported ? "/api/check" : null);
+  const { range } = useRange();
   if (st.error) return <ErrorBox error={st.error} onRetry={st.reload} />;
   if (!st.data) return <Loading />;
   if (!st.data.imported) {
@@ -27,9 +31,15 @@ export default function Overview() {
   if (an.error) return <ErrorBox error={an.error} onRetry={an.reload} />;
   const a = an.data;
   const thisYear = a?.years.find((y) => y.year === Number(a.as_of.slice(0, 4)));
+  const bars = a ? gainBars(a.months, range, a.as_of) : null;
+  const win = a ? resolve(range, a.as_of) : null;
+  const tl = a && win ? a.timeline.filter((p) => inRange(p.date, win)) : [];
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Overview</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">Overview</h1>
+        <RangePicker />
+      </div>
       <p className="text-xs text-slate-500">From {s.filename} · workbook saved {fmtTimestamp(s.saved_at)} · prices as of {a?.as_of ?? s.as_of}</p>
       {s.review_pending > 0 && <Note><b>{s.review_pending} items to review</b>: those rows are not in these numbers yet. <Link className="underline" href="/review">Review them</Link>.</Note>}
       {!a ? <Loading /> : (
@@ -49,17 +59,18 @@ export default function Overview() {
             <Stat label="Money in shares (cost)" value={usd(a.open.cost_usd)} sub="FIFO cost of what you hold" />
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
-            <Section title="Realised gain per year (FIFO, USD)" right={<Link className="text-xs underline" href="/years">per year</Link>}>
-              <Columns label="Realised gain per year" fmt={(v) => usd(v)} data={a.years.map((y) => ({
-                key: String(y.year), label: String(y.year), value: y.gain_usd,
-                lines: [["Realised gain", usd(y.gain_usd)], ["Sales", String(y.sales)], ["Won", pct(y.win_rate_pct, 0, false)]],
+            <Section title={`Realised gain per ${bars?.monthly ? "month" : "year"} (FIFO, USD) · ${label(range)}`} right={<Link className="text-xs underline" href="/years">per year</Link>}>
+              <Columns label={`Realised gain per ${bars?.monthly ? "month" : "year"}`} fmt={(v) => usd(v)} data={(bars?.bars ?? []).map((b) => ({
+                key: b.key, label: b.label, value: b.value,
+                lines: [[b.key, ""], ["Realised gain", usd(b.value)], ["Sales", String(b.sales)], ["Won", b.sales ? pct((b.wins / b.sales) * 100, 0, false) : "—"]] as [string, string][],
               }))} />
             </Section>
-            <Section title="Money in shares and cumulative realised gain">
+            <Section title={`Money in shares and cumulative realised gain · ${label(range)}`}>
+              {tl.length < 2 ? <p className="text-sm text-slate-500">Too few month-ends in this period for a line; choose a longer period.</p> : (
               <Lines label="Money invested in shares (cost) and cumulative realised gain, month-ends" fmt={(v) => usd(v)}
-                dates={a.timeline.map((p) => p.date)}
-                series={[{ name: "Money in shares (cost)", color: "var(--viz-1)", values: a.timeline.map((p) => p.invested_usd) },
-                  { name: "Cumulative realised gain", color: "var(--viz-2)", values: a.timeline.map((p) => p.realised_cum_usd) }]} />
+                dates={tl.map((p) => p.date)}
+                series={[{ name: "Money in shares (cost)", color: "var(--viz-1)", values: tl.map((p) => p.invested_usd) },
+                  { name: "Cumulative realised gain", color: "var(--viz-2)", values: tl.map((p) => p.realised_cum_usd) }]} />)}
               <p className="mt-1 text-xs text-slate-500">Month-ends. Market value isn&apos;t shown over time: the sheet only has today&apos;s prices.</p>
             </Section>
           </div>

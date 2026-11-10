@@ -3,15 +3,19 @@
 import { useState } from "react";
 
 import { Columns } from "@/components/charts";
+import { RangePicker, useRange } from "@/components/RangePicker";
 import { ErrorBox, Loading, Note, Pct, Section, Usd } from "@/components/ui";
 import { type Analysis, useApi } from "@/lib/api";
 import { pct, usd } from "@/lib/format";
+import { gainBars } from "@/lib/periods";
+import { label } from "@/lib/range";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export default function YearsPage() {
   const q = useApi<Analysis>("/api/analysis");
   const [year, setYear] = useState<number | null>(null);
+  const { range } = useRange();
   if (q.error) return <ErrorBox error={q.error} onRetry={q.reload} />;
   if (!q.data) return <Loading />;
   const a = q.data;
@@ -25,10 +29,15 @@ export default function YearsPage() {
   });
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Per year</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">Per year</h1>
+        <RangePicker />
+      </div>
       <Note tone="slate">{a.limits}</Note>
-      <Section title="Realised gain per year (FIFO, USD)">
-        <Columns label="Realised gain per year" fmt={(v) => usd(v)} data={ys.map((y) => ({ key: String(y.year), label: String(y.year), value: y.gain_usd }))} />
+      <Section title={`Realised gain per ${gainBars(a.months, range, a.as_of).monthly ? "month" : "year"} (FIFO, USD) · ${label(range)}`}>
+        <Columns label="Realised gain in the chosen period" fmt={(v) => usd(v)}
+          data={gainBars(a.months, range, a.as_of).bars.map((b) => ({ key: b.key, label: b.label, value: b.value,
+            lines: [[b.key, ""], ["Realised gain", usd(b.value)], ["Sales", String(b.sales)]] as [string, string][] }))} />
         <div className="mt-3 overflow-x-auto">
           <table className="tbl num w-full text-sm">
             <thead><tr><th>Year</th><th className="text-right">Sales</th><th className="text-right">Won</th><th className="text-right">Realised gain</th><th className="text-right">Dividends</th>
