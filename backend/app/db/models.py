@@ -61,6 +61,18 @@ class FxRate(Base):
     per_eur: Mapped[float] = mapped_column(Float)
 
 
+class CapitalFlow(Base):
+    """Money you put into (positive) or took out of (negative) your accounts, entered on the Returns page."""
+    __tablename__ = "capital_flows"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    amount: Mapped[float] = mapped_column(Float)  # in `currency`; + deposit, − withdrawal
+    currency: Mapped[str] = mapped_column(String(3))
+    account: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class Setting(Base):
     __tablename__ = "settings"
     key: Mapped[str] = mapped_column(String(50), primary_key=True)

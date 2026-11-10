@@ -25,8 +25,11 @@ If a port is busy, the script says which program is using it. Stop the app with 
 2. **Review**: decide on the rows the app can't rebuild by itself (see `docs/SPEC.md` §2). Nothing is guessed;
    until you decide, those rows are left out. Decisions are kept if you import the same rows again.
 3. **Stocks**: merge names that are the same stock (suggestions are offered) and add tickers if you like.
-4. **Sales (FIFO)**, **Open positions**, **Overview**: the results, in USD at the ECB rate of each trade date.
-5. **Check vs sheet**: the app's rebuilt numbers next to your sheet's own (sales-log P/L per year, open
+4. **Overview**, **Positions**, **Sales**, **Per stock**, **Per year**, **Statistics**: the results, in USD at the ECB
+   rate of each trade date.
+5. **Returns**: the money-weighted return of your trades; enter your dated deposits and withdrawals to also see
+   your return on capital (overall and per year).
+6. **Check vs sheet**: the app's rebuilt numbers next to your sheet's own (sales-log P/L per year, open
    positions' cost and P/L), with the reason for every difference.
 
 Gains are before fees and dividends, which the sheet doesn't record. This reports what happened; it isn't advice.

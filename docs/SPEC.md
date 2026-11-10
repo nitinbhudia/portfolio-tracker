@@ -86,8 +86,7 @@ trades in the app.
    - simple: total gain ÷ capital put in;
    - per year: gain in the year ÷ capital at the start of the year (+ money added during the year);
    - money-weighted return (XIRR) on dated deposits, once you've entered them.
-   v1 capital = the per-account amounts in your cash block, dated 1 January of the year in their name
-   (e.g. "IBKR USD 2023" → 2023-01-01). You can replace them with real dated deposits and withdrawals.
+   capital = the dated deposits and withdrawals you enter (see "Changes found while building phase 2").
 7. **Trading statistics:** win rate, average win vs average loss, profit factor, best and worst sales and
    stocks, average holding period of winners vs losers, gains by holding period (<1 month, 1–12 months,
    >1 year).
@@ -97,6 +96,16 @@ trades in the app.
 
 Charts: realised gain per year and month (bars), portfolio value and capital over time (line),
 allocation by stock/broker/currency (bars, not pies).
+
+### Changes found while building phase 2 (data-driven)
+
+- **No past prices in the sheet**, so the portfolio's value on past dates isn't known. "Total return for the year
+  (realised + change in unrealised)" and "portfolio value over time" can't be computed honestly. Instead:
+  realised gain per year and month; realised gain ÷ average money invested in shares; a month-end chart of
+  money in shares (FIFO cost) and cumulative realised gain.
+- **The cash block is cash balances, not deposits** (header "Orginal | Dollar", first row "Current … Cash",
+  ending "Tot Cash"). It is shown for reference only. Return on capital uses the dated deposits and withdrawals
+  you enter on the Returns page; until then the app shows the money-weighted return (XIRR) of your trades.
 
 ## 6. Tech
 
@@ -131,7 +140,6 @@ ECB rates are fetched from the ECB's free API and stored.
 
 - **FIFO across brokers or per broker?** Default: per stock **across all brokers** (one pool per stock).
   Per broker is usual for tax reporting in some countries — say if you want that.
-- **Capital** = the cash-block amounts dated 1 January of their year (you can replace them with dated
-  deposits later).
+- **Capital** = dated deposits and withdrawals you enter (the cash block turned out to be balances).
 - **Accounts named by year** ("IBKR 23", "IBKR 24", "KBC 21") are treated as separate accounts of the same
   broker, grouped under the broker in totals.

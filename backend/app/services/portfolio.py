@@ -11,6 +11,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db import models as m
+from app.engine import analytics as AN
 from app.engine import check as C
 from app.engine import fifo as FIFO
 from app.engine import fx as FX
@@ -474,3 +475,164 @@ def positions(db: Session) -> dict:
 def check(db: Session) -> dict:
     st = _need(db)
     return C.check(st["wb"], st["rb"])
+
+
+# ---------------------------------------------------------------- phase 2: analysis
+
+LIMITS = ("Your sheet only has today's prices, so what the portfolio was worth on past dates isn't known: per-year "
+          "figures use realised gains. Gains are before fees, dividends and interest, which the sheet doesn't record. "
+          "Rows still on the Review page are left out.")
+
+
+def _buys(st) -> list[dict]:
+    rt = st["rates"]
+    out = []
+    for t in st["rb"].trades:
+        if t.kind != "buy":
+            continue
+        r = rt.usd(t.currency, t.date)
+        out.append({"pool": t.pool, "stock": t.stock, "stock_key": t.stock_key, "currency": t.currency, "date": t.date,
+                    "shares": t.shares, "price": t.price, "scale": t.scale, "row": t.row, "id": t.id, "broker": t.broker,
+                    "cost_local": t.value, "cost_usd": t.value * r.rate if r else None,
+                    "rate": r.rate if r else None, "rate_date": r.rate_date.isoformat() if r and r.rate_date else None})
+    return out
+
+
+def capital_flows(db: Session, st=None) -> tuple[list[dict], list[tuple[date, float]], list[str]]:
+    """Entered deposits/withdrawals with USD values at the ECB rate of their date; problems for any without a rate."""
+    rt = st["rates"] if st else rates(db)
+    rows, usd, problems = [], [], []
+    for f in db.scalars(select(m.CapitalFlow).order_by(m.CapitalFlow.date, m.CapitalFlow.id)):
+        r = rt.usd(f.currency, f.date)
+        v = f.amount * r.rate if r else None
+        if v is None:
+            problems.append(f"No ECB rate for {f.currency} on {f.date}: that entry is left out.")
+        else:
+            usd.append((f.date, v))
+        rows.append({"id": f.id, "date": f.date.isoformat(), "amount": f.amount, "currency": f.currency, "account": f.account,
+                     "note": f.note, "usd": v, "rate": r.rate if r else None})
+    return rows, usd, problems
+
+
+def add_capital(db: Session, d: dict) -> dict:
+    try:
+        when = date.fromisoformat(str(d["date"]))
+        amount = float(d["amount"])
+    except (KeyError, TypeError, ValueError) as e:
+        raise BadRequest("needs a date (YYYY-MM-DD) and an amount (+ deposit, − withdrawal)") from e
+    cur = str(d.get("currency") or "USD").strip().upper()
+    if cur not in R.KNOWN_CURRENCIES:
+        raise BadRequest(f"currency must be one of {sorted(R.KNOWN_CURRENCIES)}")
+    if amount == 0:
+        raise BadRequest("amount can't be 0")
+    if when > datetime.now(timezone.utc).date():
+        raise BadRequest("date can't be in the future")
+    db.add(m.CapitalFlow(date=when, amount=amount, currency=cur, account=(d.get("account") or None),
+                         note=(d.get("note") or None)))
+    db.commit()
+    if cur not in ("USD", "EUR") or not st_rates_cover(db, cur, when):
+        ensure_fx_for(db, [cur], when)
+    return capital(db)
+
+
+def st_rates_cover(db: Session, cur: str, when: date) -> bool:
+    rt = rates(db)
+    return cur == "USD" or rt.usd(cur, when) is not None
+
+
+def ensure_fx_for(db: Session, curs: list[str], start: date) -> None:
+    try:
+        rows = FX_FETCH([c for c in curs if c not in ("USD", "EUR")], start - timedelta(days=10))
+    except FX.FxError:
+        return
+    existing = {(r.date, r.currency) for r in db.scalars(select(m.FxRate))}
+    for d, c, v in rows:
+        if (d, c) not in existing:
+            db.add(m.FxRate(date=d, currency=c, per_eur=v))
+    db.commit()
+    _invalidate()
+
+
+def delete_capital(db: Session, flow_id: int) -> dict:
+    f = db.get(m.CapitalFlow, flow_id)
+    if f is None:
+        raise NotFound(f"entry {flow_id} not found")
+    db.delete(f)
+    db.commit()
+    return capital(db)
+
+
+def capital(db: Session) -> dict:
+    st = state(db)
+    rows, _, problems = capital_flows(db, st)
+    cash = st["wb"].cash if st else []
+    return {"flows": rows, "problems": problems, "sheet_cash": cash,
+            "sheet_cash_note": "As recorded in your sheet's cash block (header 'Orginal | Dollar'). Shown for reference; "
+                               "not used in any calculation."}
+
+
+def analysis(db: Session) -> dict:
+    st = _need(db)
+    sales = st["sales"]
+    buys = _buys(st)
+    pos = positions(db)
+    flows, cap_usd, problems = capital_flows(db, st)
+    ref = as_of(st)
+    buy_flows = [(b["date"], b["cost_usd"]) for b in buys]
+    tl = AN.timeline(buy_flows, sales, ref)
+    t = pos["totals"]
+    by_broker: dict[str, float] = defaultdict(float)
+    by_cur: dict[str, float] = defaultdict(float)
+    for p in pos["positions"]:
+        if p["value_usd"] is None:
+            continue
+        lots_sh = sum(lot["shares"] for lot in p["lots"]) or 1.0
+        for lot in p["lots"]:
+            by_broker[lot["broker"] or "—"] += p["value_usd"] * lot["shares"] / lots_sh
+        by_cur[p["currency"]] += p["value_usd"]
+    tot = sum(by_cur.values())
+
+    def alloc(d):
+        return [{"label": k, "value_usd": v, "pct": v / tot * 100 if tot else None} for k, v in sorted(d.items(), key=lambda x: -x[1])]
+
+    return {
+        "as_of": ref.isoformat(),
+        "statistics": AN.statistics(sales),
+        "months": AN.months(sales),
+        "years": AN.years(sales, tl, cap_usd or None),
+        "timeline": [{"date": p.date.isoformat(), "invested_usd": p.invested_usd, "realised_cum_usd": p.realised_cum_usd} for p in tl],
+        "returns": AN.returns(buy_flows, sales, t["value_usd"], t["cost_usd"] if not t["not_computed"] else None, ref, cap_usd or None),
+        "allocation": {"by_broker": alloc(by_broker), "by_currency": alloc(by_cur),
+                       "by_stock": [{"label": p["stock"] + (f" ({p['currency']})" if p["currency"] != "USD" else ""),
+                                     "value_usd": p["value_usd"], "pct": p["weight_pct"]} for p in pos["positions"] if p["value_usd"] is not None]},
+        "open": {"value_usd": t["value_usd"], "cost_usd": t["cost_usd"], "unrealised_usd": t["unrealised_usd"],
+                 "positions": len(pos["positions"])},
+        "capital_entries": len(flows), "capital_problems": problems,
+        "review_pending": st["rb"].accounting["review_pending"],
+        "limits": LIMITS,
+    }
+
+
+def by_stock(db: Session) -> dict:
+    st = _need(db)
+    pos = positions(db)
+    values = {f"{p['stock_key']}|{p['currency']}": p for p in pos["positions"]}
+    rows = AN.per_stock(st["sales"], st["lots"], _buys(st), values)
+    return {"stocks": rows, "as_of": as_of(st).isoformat(), "limits": LIMITS}
+
+
+def stock_detail(db: Session, pool: str) -> dict:
+    st = _need(db)
+    buys = [b for b in _buys(st) if b["pool"] == pool]
+    sales = [s for s in st["sales"] if f"{s.stock_key}|{s.currency}" == pool]
+    if not buys and not sales:
+        raise NotFound("no trades for that stock")
+    pos = next((p for p in positions(db)["positions"] if f"{p['stock_key']}|{p['currency']}" == pool), None)
+    summary = next((r for r in by_stock(db)["stocks"] if r["pool"] == pool), None)
+    trades = [{"kind": "buy", "date": b["date"].isoformat(), "shares": b["shares"], "price": b["price"], "row": b["row"],
+               "broker": b["broker"], "value_usd": b["cost_usd"], "gain_usd": None, "id": b["id"]} for b in buys]
+    trades += [{"kind": "sell", "date": s.date.isoformat(), "shares": s.shares, "price": s.price, "row": s.row,
+                "broker": s.broker, "value_usd": s.proceeds_usd, "gain_usd": s.gain_usd, "gain_pct": s.gain_pct,
+                "days_held": s.days_held, "id": s.id, "matches": [_jsonable(asdict(mm)) for mm in s.matches]} for s in sales]
+    trades.sort(key=lambda x: (x["date"], 0 if x["kind"] == "buy" else 1))
+    return {"pool": pool, "summary": summary, "position": pos, "trades": trades, "as_of": as_of(st).isoformat()}

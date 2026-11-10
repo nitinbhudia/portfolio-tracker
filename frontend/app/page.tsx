@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 
+import { Columns, Lines, RankedBars } from "@/components/charts";
 import { ErrorBox, Loading, Note, Pct, Section, Stat, Usd, btnPrimary } from "@/components/ui";
-import { type CheckResp, type PositionsResp, type SalesResp, type Status, useApi } from "@/lib/api";
-import { fmtTimestamp, num, usd } from "@/lib/format";
+import { type Analysis, type CheckResp, type Status, useApi } from "@/lib/api";
+import { fmtTimestamp, num, pct, usd } from "@/lib/format";
 
 export default function Overview() {
   const st = useApi<Status>("/api/status");
   const imported = st.data?.imported === true;
-  const sales = useApi<SalesResp>(imported ? "/api/sales" : null);
-  const pos = useApi<PositionsResp>(imported ? "/api/positions" : null);
+  const an = useApi<Analysis>(imported ? "/api/analysis" : null);
   const chk = useApi<CheckResp>(imported ? "/api/check" : null);
   if (st.error) return <ErrorBox error={st.error} onRetry={st.reload} />;
   if (!st.data) return <Loading />;
@@ -24,47 +24,61 @@ export default function Overview() {
     );
   }
   const s = st.data;
-  const realised = sales.data?.totals.gain_usd;
-  const unreal = pos.data?.totals.unrealised_usd;
+  if (an.error) return <ErrorBox error={an.error} onRetry={an.reload} />;
+  const a = an.data;
+  const thisYear = a?.years.find((y) => y.year === Number(a.as_of.slice(0, 4)));
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Overview</h1>
-      <p className="text-xs text-slate-500">From {s.filename} · workbook saved {fmtTimestamp(s.saved_at)} · imported {fmtTimestamp(s.uploaded_at)}</p>
-      {s.review_pending > 0 && (
-        <Note><b>{s.review_pending} items to review</b>: those rows are not in these numbers yet. <Link className="underline" href="/review">Review them</Link>.</Note>
+      <p className="text-xs text-slate-500">From {s.filename} · workbook saved {fmtTimestamp(s.saved_at)} · prices as of {s.as_of}</p>
+      {s.review_pending > 0 && <Note><b>{s.review_pending} items to review</b>: those rows are not in these numbers yet. <Link className="underline" href="/review">Review them</Link>.</Note>}
+      {!a ? <Loading /> : (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Stat label="Total gain" value={<Usd v={a.returns.total_gain_usd} />} sub="realised + unrealised, before fees" />
+            <Stat label="Realised (all years)" value={<Usd v={a.returns.realised_usd} />} sub={`${a.statistics.sales} sales · ${pct(a.statistics.win_rate_pct, 0, false)} won`} />
+            <Stat label={`Realised in ${a.as_of.slice(0, 4)}`} value={<Usd v={thisYear?.gain_usd ?? 0} />} sub={`${thisYear?.sales ?? 0} sales so far`} />
+            <Stat label="Open positions" value={usd(a.open.value_usd)} sub={<>{a.open.positions} stocks · unrealised <Usd v={a.open.unrealised_usd} /></>} />
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Stat label="Return on your trades (XIRR)" value={<Pct v={a.returns.money_in_shares.xirr_pct} />} sub={<Link className="underline" href="/returns">per year, money-weighted</Link>} />
+            <Stat label="Return on capital" value={a.returns.capital ? <Pct v={a.returns.capital.xirr_pct} /> : "—"}
+              sub={a.returns.capital ? `XIRR on ${usd(a.returns.capital.net_usd)} net put in` : <Link className="underline" href="/returns">enter your deposits</Link>} />
+            <Stat label="Profit factor" value={num(a.statistics.profit_factor, 2)} sub={<Link className="underline" href="/stats">gains ÷ losses</Link>} />
+            <Stat label="Money in shares (cost)" value={usd(a.open.cost_usd)} sub="FIFO cost of what you hold" />
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Section title="Realised gain per year (FIFO, USD)" right={<Link className="text-xs underline" href="/years">per year</Link>}>
+              <Columns label="Realised gain per year" fmt={(v) => usd(v)} data={a.years.map((y) => ({
+                key: String(y.year), label: String(y.year), value: y.gain_usd,
+                lines: [["Realised gain", usd(y.gain_usd)], ["Sales", String(y.sales)], ["Won", pct(y.win_rate_pct, 0, false)]],
+              }))} />
+            </Section>
+            <Section title="Money in shares and cumulative realised gain">
+              <Lines label="Money invested in shares (cost) and cumulative realised gain, month-ends" fmt={(v) => usd(v)}
+                dates={a.timeline.map((p) => p.date)}
+                series={[{ name: "Money in shares (cost)", color: "var(--viz-1)", values: a.timeline.map((p) => p.invested_usd) },
+                  { name: "Cumulative realised gain", color: "var(--viz-2)", values: a.timeline.map((p) => p.realised_cum_usd) }]} />
+              <p className="mt-1 text-xs text-slate-500">Month-ends. Market value isn&apos;t shown over time: the sheet only has today&apos;s prices.</p>
+            </Section>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Section title="Open positions by broker account"><RankedBars rows={a.allocation.by_broker.map((r) => ({ label: r.label, value: r.value_usd, pct: r.pct }))} fmt={(v) => usd(v)} /></Section>
+            <Section title="By currency"><RankedBars rows={a.allocation.by_currency.map((r) => ({ label: r.label, value: r.value_usd, pct: r.pct }))} fmt={(v) => usd(v)} /></Section>
+            <Section title="Largest positions"><RankedBars rows={a.allocation.by_stock.map((r) => ({ label: r.label, value: r.value_usd, pct: r.pct }))} fmt={(v) => usd(v)} max={8} /></Section>
+          </div>
+          <Section title="Import check" right={<Link className="text-xs underline" href="/check">details</Link>}>
+            {!chk.data ? <Loading /> : (
+              <ul className="space-y-1 text-sm">
+                <li>Sales log: <b>{chk.data.sales_log.lines_matching} of {chk.data.sales_log.lines}</b> sales reproduce your sheet exactly.</li>
+                <li>Open positions: <b>{chk.data.open_positions.stocks_matching} of {chk.data.open_positions.stocks}</b> stocks match the sheet&apos;s cost and P/L.</li>
+                <li>Exchange rates: ECB, up to {s.fx_latest ?? "—"}{s.fx?.status === "error" ? ` (last update failed: ${s.fx.message})` : ""}.</li>
+              </ul>
+            )}
+          </Section>
+          <p className="text-xs text-slate-500">{a.limits}</p>
+        </>
       )}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Open positions value" value={usd(pos.data?.totals.value_usd)} sub={pos.data ? `${pos.data.positions.length} stocks, prices of ${pos.data.as_of}` : "…"} />
-        <Stat label="Unrealised gain" value={<Usd v={unreal} />} sub={pos.data ? <Pct v={pos.data.totals.cost_usd ? (pos.data.totals.unrealised_usd / pos.data.totals.cost_usd) * 100 : null} /> : null} />
-        <Stat label="Realised gain (all years, FIFO)" value={<Usd v={realised} />} sub={sales.data ? `${sales.data.totals.sales} sales` : "…"} />
-        <Stat label="Total gain" value={<Usd v={realised != null && unreal != null ? realised + unreal : null} />} sub="realised + unrealised, before fees" />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Section title="Realised gain per year (FIFO, USD)" right={<Link className="text-xs underline" href="/sales">all sales</Link>}>
-          {!sales.data ? <Loading /> : (
-            <table className="tbl num w-full text-sm">
-              <thead><tr><th>Year</th><th className="text-right">Sales</th><th className="text-right">Gain</th><th className="text-right">Win rate</th></tr></thead>
-              <tbody>{sales.data.by_year.map((y) => (
-                <tr key={y.year}><td>{y.year}</td><td className="text-right">{y.sales}</td><td className="text-right"><Usd v={y.gain_usd} /></td>
-                  <td className="text-right">{y.sales - y.not_computed ? `${Math.round((y.wins / (y.sales - y.not_computed)) * 100)}%` : "—"}</td></tr>
-              ))}</tbody>
-            </table>
-          )}
-        </Section>
-        <Section title="Import check" right={<Link className="text-xs underline" href="/check">details</Link>}>
-          {!chk.data ? <Loading /> : (
-            <ul className="space-y-1 text-sm">
-              <li>Sales log: <b>{chk.data.sales_log.lines_matching} of {chk.data.sales_log.lines}</b> sales reproduce your sheet exactly
-                (sheet total {num(chk.data.sales_log.total_sheet)}, app {num(chk.data.sales_log.total_app)}).</li>
-              <li>Open positions: <b>{chk.data.open_positions.stocks_matching} of {chk.data.open_positions.stocks}</b> stocks match the sheet&apos;s cost and P/L.</li>
-              <li>Position rows: {s.accounting.position_rows} = {s.accounting.open_buys} open purchases + {s.accounting.closed_buys} closed purchases +{" "}
-                {s.accounting.sales} sales + {s.accounting.excluded} excluded + {s.accounting.not_classified} waiting on review.</li>
-              <li>Exchange rates: ECB, up to {s.fx_latest ?? "—"}{s.fx?.status === "error" ? ` (last update failed: ${s.fx.message})` : ""}.</li>
-            </ul>
-          )}
-        </Section>
-      </div>
-      <p className="text-xs text-slate-500">More analysis (return on capital, per stock, trading statistics, charts) comes in phase 2.</p>
     </div>
   );
 }
