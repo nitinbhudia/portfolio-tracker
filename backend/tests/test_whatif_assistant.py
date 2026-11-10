@@ -234,3 +234,13 @@ def test_assistant_average_down_tool(client, monkeypatch):  # noqa: F811
     last = client.post("/api/assistant/ask", json={"question": "average down alpha"}).json()["display"][-1]
     assert not last["calls"][0]["error"] and last["calls"][0]["result"]["plan"]["break_even"] == 105
     assert any(t["name"] == "simulate_average_down" for t in fc.calls[0]["tools"])
+
+
+def test_explore_portfolio_map(client):  # noqa: F811
+    upload(client)
+    r = client.get("/api/explore/portfolio").json()
+    a = next(x for x in r["positions"] if x["stock"] == "Alpha Corp")
+    assert a["sector"] == "(no sector)" and a["value_usd"] == pytest.approx(625) and a["gain_usd"] == pytest.approx(75)
+    (lot,) = a["lots"]
+    assert lot["bought"] == "2024-02-01" and lot["shares"] == 5 and lot["gain_usd"] == pytest.approx(75)
+    assert r["total_usd"] == pytest.approx(691)

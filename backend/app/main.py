@@ -405,6 +405,11 @@ def whatif_average_down(body: AverageDownIn, db: Session = Depends(get_db)):
     return WS.simulate_average_down(db, body.pool, body.buy_price, body.shares, body.amount_usd, body.target_break_even, body.fee)
 
 
+@app.get("/api/explore/portfolio")
+def explore_portfolio(db: Session = Depends(get_db)):
+    return WS.portfolio_map(db)
+
+
 @app.get("/api/sectors")
 def sectors(db: Session = Depends(get_db)):
     return WS.sectors(db)

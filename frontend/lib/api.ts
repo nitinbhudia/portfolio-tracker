@@ -229,3 +229,8 @@ export type ADResp = { pool: string; stock: string; currency: string; pence: boo
   now: { shares: number; cost_usd: number; value_usd: number; unrealised_usd: number; break_even: number; break_even_usd: number;
     rise_needed_pct: number; in_loss: boolean; if_falls_further_usd: number };
   plan: ADPlan | null; table: { drop_pct: number; buy_price: number; plans: ADPlan[] }[]; stress_pct: number; notes: string };
+
+export type ExLot = { bought: string; broker: string; shares: number; buy_price: number; cost_usd: number | null; value_usd: number; gain_usd: number | null };
+export type ExPosition = { pool: string; stock: string; sector: string; currency: string; pence: boolean; shares: number; price: number;
+  value_usd: number; cost_usd: number | null; gain_usd: number | null; lots: ExLot[] };
+export type ExPortfolio = { as_of: string; total_usd: number; positions: ExPosition[] };
