@@ -135,7 +135,9 @@ export default function ReviewPage() {
   useEffect(() => {
     if (q.data && (!kind || !counts[kind])) setKind(kinds[0] ?? null);
   }, [q.data, kind, counts, kinds]);
-  useEffect(() => setShown(PAGE), [kind, which]);
+  useEffect(() => {
+    setShown(PAGE);
+  }, [kind, which]);
 
   if (q.error) return <ErrorBox error={q.error} onRetry={q.reload} />;
   if (!q.data) return <Loading />;

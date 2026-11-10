@@ -196,3 +196,26 @@ export type BenchmarksResp = {
   note: string; review_pending: number;
 };
 export type RefreshResp = { results: { id: string; ok: boolean; points?: number; last?: string; message?: string }[]; indexes: IndexStatus[] };
+
+// ---------------------------------------------------------------- what-if, sectors, assistant
+
+export type WIHolding = { pool: string; stock: string; currency: string; sector: string | null; shares: number; price: number | null; pence: boolean;
+  value_usd: number | null; cost_usd: number | null; unrealised_usd: number | null; weight_pct: number | null; price_date: string | null };
+export type WIOverview = { as_of: string; total_usd: number; realised_this_year_usd: number; holdings: WIHolding[];
+  sectors: { sector: string; value_usd: number; weight_pct: number | null }[]; sector_list: string[]; notes: string };
+export type WILot = { bought: string; row: number | null; broker: string; shares: number; buy_price: number; cost_usd: number; proceeds_usd: number; gain_usd: number; days_held: number };
+export type WISale = { pool: string; stock: string; currency: string; sector: string | null; shares: number; price: number; proceeds_usd: number; cost_usd: number;
+  gain_usd: number; gain_pct: number | null; held_over_1y_gain_usd: number; held_under_1y_gain_usd: number; lots: WILot[]; remaining_shares: number };
+export type WISellResp = { sales: WISale[]; as_of: string; notes: string;
+  totals: { proceeds_usd: number; cost_usd: number; gain_usd: number; gain_pct: number | null; gains_usd: number; losses_usd: number; held_over_1y_gain_usd: number; held_under_1y_gain_usd: number };
+  year: { realised_so_far_usd: number; realised_after_usd: number }; portfolio: { value_before_usd: number; value_after_usd: number; cash_raised_usd: number } };
+export type WIRebalResp = { by: "stock" | "sector"; total_usd: number; as_of: string; note: string; bought_usd: number; sold_usd: number; cash_usd: number;
+  trades: { pool: string; stock: string; sector: string | null; action: "buy" | "sell"; shares: number; price: number; currency: string; value_usd: number }[];
+  sale: WISellResp | null; rows: { key: string; name: string; before_usd: number; before_pct: number; target_pct: number | null; after_usd: number; after_pct: number | null }[] };
+export type SectorRow = { group_key: string; stock: string; open: boolean; sector: string | null; source: "ai" | "you" | null; confirmed: boolean };
+export type SectorsResp = { stocks: SectorRow[]; sectors: string[]; ai_available: boolean; suggested?: number;
+  counts: { open: number; open_confirmed: number; suggested_unconfirmed: number } };
+export type ChatCall = { tool: string; input: Record<string, unknown>; error: boolean; result: Record<string, unknown> };
+export type ChatTurn = { role: "user" | "assistant"; text: string; calls?: ChatCall[]; date?: string };
+export type ChatResp = { chat_id: number; display: ChatTurn[] };
+export type AssistantStatus = { available: boolean; model: string; setup: string };

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { SectorsPanel } from "@/components/SectorsPanel";
 import { ErrorBox, Loading, Note, Section, btn, input } from "@/components/ui";
 import { ApiError, apiFetch, jsonInit, type StockGroup, type StocksResp, useApi } from "@/lib/api";
 
@@ -46,7 +47,8 @@ export default function StocksPage() {
   const shown = d.stocks.filter((g) => !filter || g.display_name.toLowerCase().includes(filter.toLowerCase()) || g.names.some((n) => n.name_key.includes(filter.toLowerCase())));
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Stocks</h1>
+      <h1 className="text-xl font-semibold">Names and sectors</h1>
+      <SectorsPanel />
       <Note tone="slate">Your sheet&apos;s Ticker column can&apos;t be read outside Excel, so stocks are identified by their Stock Name. Names that differ only in spaces or
         capitals are already treated as one stock. Merge names that are the same stock; FIFO then runs across all their rows (per currency).</Note>
       <ErrorBox error={err} />

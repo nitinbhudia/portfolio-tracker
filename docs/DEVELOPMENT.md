@@ -1,5 +1,26 @@
 # Development notes
 
+## What-if and the Ask assistant
+
+- **What-if engine** (`engine/whatif.py`): simulated sales take shares from the oldest remaining FIFO lots, valued at each
+  position's latest price and ECB rate, cost at purchase-date rates (gain includes the currency effect), split by holding
+  period, with the effect on this year's realised gain. Rebalancing: targets as % of today's value by stock or by sector;
+  positions without a target are left alone; whole shares; sector changes spread across the sector's stocks by value;
+  cash raised or needed is reported. Nothing is stored.
+- **Sectors** (`stock_sectors`): Claude suggests a sector per open position from its name (structured output with a fixed
+  sector list, effort low); suggestions are unconfirmed and unused until confirmed on the Names page; set by hand anytime.
+- **Assistant** (`services/assistant.py`): Claude Opus 5.5 with five strict tools (portfolio, find positions, simulate sale,
+  simulate rebalance, realised by year), effort medium, cached system prompt, server-side refusal fallback
+  (`server-side-fallback-2026-07-01`, `fallbacks: "default"`). Manual tool loop (max 10 rounds); the conversation is stored
+  append-only with the API's content blocks unchanged (thinking blocks replayed as received). Tool errors go back as
+  `is_error` results; API errors, refusals and unexpected failures become readable messages. The key comes from
+  `ANTHROPIC_API_KEY` in the git-ignored `.env`; without it, What-if still works.
+- **Tests**: 9 backend for what-if (sales, fees, sectors, rebalancing by hand, validation), sectors (suggest with a scripted
+  model reply, confirm, validation) and the assistant loop (tool calls with real results, history kept unchanged across
+  turns, tool errors, refusals, API and unexpected errors), plus a check that the real SDK builds the intended request.
+  Frontend: the answer renderer (tables, lists, no raw HTML, no endless loop on odd lines). No real Claude call was made
+  while building (no key in this environment); the browser check used a scripted stand-in that calls the real tools.
+
 ## Index comparison and chart time ranges
 
 **CSV formats** (`engine/indexcsv.py`): comma, semicolon or tab files; Date/Datum/observation_date columns; Close,

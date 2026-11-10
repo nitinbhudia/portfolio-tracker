@@ -46,7 +46,15 @@ If a port is busy, the script says which program is using it. Stop the app with 
    download fails, the page says why for that index and you can upload a CSV for it: the daily-history download of most
    finance sites works (US, UK and European date formats, Close / Close/Last / Price columns).
 8. **Time range**: the buttons at the top (1M, 3M, 6M, YTD, 1Y, 3Y, 5Y, All, or your own dates) change every chart.
-9. **Check vs sheet**: the app's rebuilt numbers next to your sheet's own (sales-log P/L per year, open
+9. **What-if**: "if I sold now" for one stock, several, a sector or everything (FIFO gain per purchase lot, before tax),
+   and a rebalancing preview by stock or sector (trades, gain realised, cash raised, weights before and after).
+   Simulations only: nothing is traded.
+10. **Ask**: type questions such as "if I sell all my Microsoft now, what's my P&L?". Claude (Anthropic's API) answers by
+   calling the app's own what-if calculations, so every figure comes from the app; the calculations used are shown under
+   each answer. Needs an Anthropic API key: copy `.env.example` to `.env` in the app's folder, put the key after
+   `ANTHROPIC_API_KEY=`, and restart. Your question and the figures it needs are sent to Anthropic; about $0.05–0.15 per
+   question. **Sectors** (Data ▾ Names) can be suggested by Claude and are only used once you confirm them.
+11. **Check vs sheet**: the app's rebuilt numbers next to your sheet's own (sales-log P/L per year, open
    positions' cost and P/L), with the reason for every difference.
 
 Gains are before fees and dividends, which the sheet doesn't record. This reports what happened; it isn't advice.

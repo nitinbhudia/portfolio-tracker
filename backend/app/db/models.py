@@ -141,3 +141,21 @@ class IndexPrice(Base):
     index_id: Mapped[str] = mapped_column(String(10), primary_key=True)
     date: Mapped[date] = mapped_column(Date, primary_key=True)
     close: Mapped[float] = mapped_column(Float)
+
+
+class StockSector(Base):
+    """Sector of a stock group: suggested by Claude (unconfirmed) or set/confirmed by you. Only confirmed ones are used."""
+    __tablename__ = "stock_sectors"
+    group_key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    sector: Mapped[str] = mapped_column(String(60))
+    source: Mapped[str] = mapped_column(String(10))  # ai | you
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class AssistantChat(Base):
+    """One conversation with the assistant: the API messages exactly as exchanged (kept unchanged for replay)."""
+    __tablename__ = "assistant_chats"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    messages: Mapped[list] = mapped_column(JSON, default=list)
+    display: Mapped[list] = mapped_column(JSON, default=list)
