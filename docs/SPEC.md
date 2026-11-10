@@ -26,22 +26,27 @@ repository `portfolio-tracker`.
 | Cash / capital block (rows 2019–2045) | **Capital** per account, as the starting point for return on capital (see §5). |
 | Pivot tables and the summary block | Not imported. Used only as **check figures** (§7). |
 
-How a trade is rebuilt:
+How a trade is rebuilt (layout verified on your workbook in phase 1: 503 of 577 sales match a purchase row
+exactly by stock, buy price and shares):
 
-- **Buy** = position row: date (col B), shares (D), price (C), currency (P), broker (J), stock name (L).
-- **Sell** = a closed position row that the sales log points to: date from the log, shares = the row's
-  shares, price = the row's Live Price (E), as typed when you sold.
-- **Needs review** (shown on an import review screen, never guessed):
-  - closed rows with no sales-log entry (about 698; most have P/L set to 0 — merged/rolled lots and
-    2020 sales from before the log started). For each you can: give the sell date and price, mark it as
-    a duplicate/merged row (excluded), or leave it out.
-  - the 4 sales typed by hand in the log (no link to a row);
-  - rows with formulas for shares/prices (e.g. `D8 = D6+D7`) — the calculated value is used and shown;
-  - odd values (a currency cell holding a number, blank names, etc.).
+- **Open row** = a purchase you still hold: buy on its Date at Price Entry.
+- **Closed row with P/L 0 and no sales-log line** = a purchase whose shares were sold later: buy on its Date.
+- **Closed row the sales log points to** = a *sale*, dated on the sale day (the log's date), shares = pieces,
+  sell price = Live Price as typed when you sold. Its Price Entry is the buy price your sheet used (kept for
+  the check figures; FIFO uses the purchase rows).
+- **Needs review** (shown on the review page, never guessed; left out of results until decided):
+  - purchases with shares that no sale accounts for, after matching every sale to the oldest earlier
+    purchases of the same stock (mostly 2020–21 rows sold before the log started);
+  - sales with no earlier purchase in the sheet for some of their shares (enter the purchase, or exclude);
+  - closed rows with a P/L but no sales-log line: treat as a sale on the row's date (your usual layout), or
+    enter a sale date and price, or exclude;
+  - the sales typed by hand in the log (no link to a row) — kept as "sheet only" or linked to a row;
+  - rows whose Live Price is still the live formula although sold, rows linked twice, a sale pointing to an
+    Open row, unreadable values, and prices that look like pence/cents with another currency.
 - **Stock names → one stock.** Tickers in the sheet are broken (`#VALUE!` for 1,335 of 1,374 rows, Excel's
-  linked Stocks type doesn't survive outside Excel), so stocks are identified by Stock Name. The review
-  screen groups near-identical names ("Ibedrola"/"Iberdrola", "Dollar Gen"/"Dollar General") for you to
-  confirm once; you can add a ticker to each stock.
+  linked Stocks type doesn't survive outside Excel), so stocks are identified by Stock Name. Names differing
+  only in spaces/capitals are one stock; the Stocks page suggests near-identical names for you to merge.
+- **GBP prices are pence** (London quotes): value = shares × price / 100.
 
 Re-importing the same file is safe (same result, nothing duplicated). After the import, you add new
 trades in the app.
