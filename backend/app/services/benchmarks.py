@@ -12,18 +12,24 @@ from app.engine import benchmarks as BM
 from . import portfolio as P
 from .portfolio import BadRequest, NotFound
 
-FETCH = BM.fetch_stooq  # replaced in tests
+FETCH = BM.fetch  # (source, symbol) -> rows; replaced in tests
 SETTING = "benchmark_symbols"
-NOTE = ("Index prices exclude dividends (so do your gains unless you entered dividends). FTSE 100 is converted to USD at "
+NOTE = ("S&P 500 and Nasdaq come from FRED (Federal Reserve Bank of St. Louis), Russell 2000 and FTSE 100 from Stooq; "
+        "both free, no key. Index prices exclude dividends (so do your gains unless you entered dividends). FTSE 100 is converted to USD at "
         "the ECB rate of each day, because your results are in USD. Your portfolio's day-by-day value isn't known (the sheet "
         "has no price history for your stocks), so the comparison uses your actual trades: the same dollars in the index "
         "over the same holding periods.")
 
 
-def _symbols(db: Session) -> dict[str, str]:
+def _symbols(db: Session) -> dict[str, dict]:
+    """index id -> {source, symbol}; an older saved plain string meant a Stooq symbol."""
     row = db.get(m.Setting, SETTING)
     saved = row.value if row else {}
-    return {k: saved.get(k, v[1]) for k, v in BM.INDEXES.items()}
+    out = {}
+    for k, (_, src, sym, _) in BM.INDEXES.items():
+        v = saved.get(k)
+        out[k] = v if isinstance(v, dict) else ({"source": "stooq", "symbol": v} if isinstance(v, str) else {"source": src, "symbol": sym})
+    return out
 
 
 def _check(index_id: str) -> None:
@@ -35,7 +41,7 @@ def _store(db: Session, index_id: str, rows: list[tuple[date, float]]) -> None:
     db.execute(delete(m.IndexPrice).where(m.IndexPrice.index_id == index_id))
     db.add_all(m.IndexPrice(index_id=index_id, date=d, close=v) for d, v in rows)
     db.commit()
-    cur = BM.INDEXES[index_id][2]
+    cur = BM.INDEXES[index_id][3]
     if cur != "USD" and rows:
         P.ensure_fx_for(db, [cur], rows[0][0])
     P._invalidate()
@@ -43,7 +49,7 @@ def _store(db: Session, index_id: str, rows: list[tuple[date, float]]) -> None:
 
 def series(db: Session) -> dict[str, BM.Series]:
     out: dict[str, BM.Series] = {}
-    for k, (_, _, cur) in BM.INDEXES.items():
+    for k, (_, _, _, cur) in BM.INDEXES.items():
         rows = db.execute(select(m.IndexPrice.date, m.IndexPrice.close).where(m.IndexPrice.index_id == k).order_by(m.IndexPrice.date)).all()
         if rows:
             out[k] = BM.Series(k, cur, [r[0] for r in rows], [r[1] for r in rows])
@@ -52,9 +58,10 @@ def series(db: Session) -> dict[str, BM.Series]:
 
 def status(db: Session) -> list[dict]:
     syms, ss = _symbols(db), series(db)
-    return [{"id": k, "name": n, "symbol": syms[k], "currency": c, "points": len(ss[k].dates) if k in ss else 0,
+    return [{"id": k, "name": n, "source": syms[k]["source"], "symbol": syms[k]["symbol"], "currency": c,
+             "points": len(ss[k].dates) if k in ss else 0,
              "first": ss[k].dates[0].isoformat() if k in ss else None, "last": ss[k].dates[-1].isoformat() if k in ss else None}
-            for k, (n, _, c) in BM.INDEXES.items()]
+            for k, (n, _, _, c) in BM.INDEXES.items()]
 
 
 def refresh(db: Session, ids: list[str] | None = None) -> dict:
@@ -62,12 +69,15 @@ def refresh(db: Session, ids: list[str] | None = None) -> dict:
     results = []
     for k in ids or list(BM.INDEXES):
         _check(k)
+        src = syms[k]
         try:
-            rows = FETCH(syms[k])
+            rows = FETCH(src["source"], src["symbol"])
             _store(db, k, rows)
             results.append({"id": k, "ok": True, "points": len(rows), "last": rows[-1][0].isoformat()})
         except BM.BenchmarkError as e:
             results.append({"id": k, "ok": False, "message": str(e)})
+        except Exception as e:  # never a bare 500: say what happened
+            results.append({"id": k, "ok": False, "message": f"Unexpected problem ({type(e).__name__}: {str(e)[:120]}). Upload a CSV instead."})
     return {"results": results, "indexes": status(db)}
 
 
@@ -81,16 +91,20 @@ def upload(db: Session, index_id: str, data: bytes) -> dict:
     return {"results": [{"id": index_id, "ok": True, "points": len(rows), "last": rows[-1][0].isoformat()}], "indexes": status(db)}
 
 
-def set_symbol(db: Session, index_id: str, symbol: str) -> dict:
+def set_symbol(db: Session, index_id: str, symbol: str, source: str | None = None) -> dict:
     _check(index_id)
     sym = (symbol or "").strip()
     if not sym or len(sym) > 20:
         raise BadRequest("symbol must be 1–20 characters")
+    src = source or _symbols(db)[index_id]["source"]
+    if src not in BM.SOURCES:
+        raise BadRequest(f"source must be one of {list(BM.SOURCES)}")
     row = db.get(m.Setting, SETTING)
+    val = {"source": src, "symbol": sym}
     if row is None:
-        db.add(m.Setting(key=SETTING, value={index_id: sym}))
+        db.add(m.Setting(key=SETTING, value={index_id: val}))
     else:
-        row.value = {**row.value, index_id: sym}
+        row.value = {**row.value, index_id: val}
     db.commit()
     return {"indexes": status(db)}
 
@@ -140,7 +154,7 @@ def view(db: Session, start: str | None, end: str | None, range_key: str | None 
     ss = series(db)
     all_time = a <= first_trade
     out_idx = []
-    for k, (name, _, cur) in BM.INDEXES.items():
+    for k, (name, _, _, cur) in BM.INDEXES.items():
         s = ss.get(k)
         row = {"id": k, "name": name, "currency": cur, "available": s is not None}
         if s:

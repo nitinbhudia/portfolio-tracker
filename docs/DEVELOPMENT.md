@@ -2,6 +2,12 @@
 
 ## Index comparison and chart time ranges
 
+**Fix (index data):** S&P 500, Nasdaq Composite and Nasdaq-100 now come from FRED (series SP500, NASDAQCOM, NASDAQ100; free,
+no key; verified live), Russell 2000 and FTSE 100 from Stooq (FRED doesn't carry them). The page fetches one index per
+request with a 25-second limit, so a slow or blocked site can't push the whole request past the web page's 2-minute
+proxy limit (the "backend isn't responding" error), and every failure, including unexpected ones, comes back as a
+message for that index. Source and symbol can be changed per index; CSV upload still works for any index.
+
 - **Index data** (`index_prices`): daily closes for S&P 500 (`^spx`), Nasdaq Composite (`^ndq`), Nasdaq-100 (`^ndx`),
   Russell 2000 (`^rut`) and FTSE 100 (`^ukx`) from Stooq's free CSV download, or a CSV you upload (Date + Close). The
   Stooq symbol of each index can be changed on the page. Stooq refuses connections from the cloud environment this was

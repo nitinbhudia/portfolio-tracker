@@ -26,15 +26,19 @@ from .analytics import xirr
 from .fifo import Lot, Sale
 from .fx import Rates
 
-INDEXES = {  # id: (name, default Stooq symbol, currency)
-    "spx": ("S&P 500", "^spx", "USD"),
-    "ndq": ("Nasdaq Composite", "^ndq", "USD"),
-    "ndx": ("Nasdaq-100", "^ndx", "USD"),
-    "rut": ("Russell 2000", "^rut", "USD"),
-    "ukx": ("FTSE 100", "^ukx", "GBP"),
+INDEXES = {  # id: (name, default source, default symbol, currency)
+    "spx": ("S&P 500", "fred", "SP500", "USD"),
+    "ndq": ("Nasdaq Composite", "fred", "NASDAQCOM", "USD"),
+    "ndx": ("Nasdaq-100", "fred", "NASDAQ100", "USD"),
+    "rut": ("Russell 2000", "stooq", "^rut", "USD"),
+    "ukx": ("FTSE 100", "stooq", "^ukx", "GBP"),
 }
+SOURCES = {"fred": "FRED (St. Louis Fed)", "stooq": "Stooq"}
 STOOQ = "https://stooq.com/q/d/l/"
+FRED = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+FRED_START = "2015-01-01"
 MAX_STALE_DAYS = 7
+TIMEOUT = httpx.Timeout(25.0, connect=10.0)
 
 
 class BenchmarkError(RuntimeError):
@@ -43,7 +47,8 @@ class BenchmarkError(RuntimeError):
 
 def parse_csv(text: str) -> list[tuple[date, float]]:
     """Daily closes from a CSV with a Date column (YYYY-MM-DD) and a Close column (also accepts 'Adj Close',
-    'Price', 'Zamkniecie'). Stooq's download has this format."""
+    'Price', 'Zamkniecie'), as Stooq writes it, or FRED's two columns (observation_date, <series>). Blank or '.'
+    values (holidays in FRED) are skipped."""
     text = text.lstrip("﻿").strip()
     if not text or "," not in text.splitlines()[0]:
         raise BenchmarkError("Not a CSV file with a header row (expected columns Date and Close).")
@@ -52,7 +57,10 @@ def parse_csv(text: str) -> list[tuple[date, float]]:
         raise BenchmarkError("The CSV has a header but no rows.")
     cols = {c.strip().lower(): c for c in rows[0].keys() if c}
     dcol = next((cols[c] for c in ("date", "data") if c in cols), None)
+    dcol = dcol or cols.get("observation_date")  # FRED
     ccol = next((cols[c] for c in ("close", "adj close", "price", "zamkniecie") if c in cols), None)
+    if dcol and not ccol and len(cols) == 2:  # FRED: the value column is named after the series
+        ccol = next(c for c in rows[0].keys() if c and c != dcol)
     if not dcol or not ccol:
         raise BenchmarkError(f"Couldn't find Date and Close columns (found: {', '.join(rows[0].keys())}).")
     out = []
@@ -69,18 +77,42 @@ def parse_csv(text: str) -> list[tuple[date, float]]:
     return sorted(dict(out).items())
 
 
-def fetch_stooq(symbol: str, client: httpx.Client | None = None) -> list[tuple[date, float]]:
-    http = client or httpx.Client(timeout=60.0, headers={"User-Agent": "PortfolioTracker/0.1 (personal tool)"}, follow_redirects=True)
+def _client() -> httpx.Client:
+    return httpx.Client(timeout=TIMEOUT, headers={"User-Agent": "PortfolioTracker/0.1 (personal tool)"}, follow_redirects=True)
+
+
+def _get(http: httpx.Client, url: str, params: dict, name: str) -> str:
     try:
-        r = http.get(STOOQ, params={"s": symbol, "i": "d"})
-    except httpx.HTTPError as e:
-        raise BenchmarkError(f"Couldn't reach Stooq ({type(e).__name__}). Upload a CSV instead.") from e
+        r = http.get(url, params=params)
+    except httpx.TimeoutException as e:
+        raise BenchmarkError(f"{name} didn't answer in time. Try again later, or upload a CSV.") from e
+    except Exception as e:  # network refused, TLS, DNS…: always a readable message, never a crash
+        raise BenchmarkError(f"Couldn't reach {name} ({type(e).__name__}). Upload a CSV instead.") from e
     if r.status_code >= 400:
-        raise BenchmarkError(f"Stooq answered HTTP {r.status_code}. Upload a CSV instead.")
-    body = r.text.strip()
-    if body.lower().startswith("no data") or not body or "," not in body.splitlines()[0]:
+        raise BenchmarkError(f"{name} answered HTTP {r.status_code}. Upload a CSV instead.")
+    return r.text.strip()
+
+
+def fetch_stooq(symbol: str, client: httpx.Client | None = None) -> list[tuple[date, float]]:
+    body = _get(client or _client(), STOOQ, {"s": symbol, "i": "d"}, "Stooq")
+    if body.lower().startswith("no data") or not body or "," not in body.splitlines()[0] or body.lstrip().startswith("<"):
         raise BenchmarkError(f"Stooq returned no data for {symbol} ({body[:60]!r}). Check the symbol or upload a CSV.")
     return parse_csv(body)
+
+
+def fetch_fred(series: str, client: httpx.Client | None = None) -> list[tuple[date, float]]:
+    body = _get(client or _client(), FRED, {"id": series, "cosd": FRED_START}, "FRED")
+    if not body or body.lstrip().startswith("<") or "," not in body.splitlines()[0]:
+        raise BenchmarkError(f"FRED returned no data for {series}. Check the series id or upload a CSV.")
+    return parse_csv(body)
+
+
+def fetch(source: str, symbol: str, client: httpx.Client | None = None) -> list[tuple[date, float]]:
+    if source == "fred":
+        return fetch_fred(symbol, client)
+    if source == "stooq":
+        return fetch_stooq(symbol, client)
+    raise BenchmarkError(f"unknown source '{source}'")
 
 
 @dataclass
