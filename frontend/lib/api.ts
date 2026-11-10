@@ -111,3 +111,47 @@ export type CheckResp = {
 export type StockGroup = { group_key: string; display_name: string; ticker: string | null; names: { name_key: string; as_written: string[]; rows: number }[];
   rows: number; open_rows: number; currencies: string[] };
 export type StocksResp = { stocks: StockGroup[]; suggestions: { name_key: string; group_key: string; as_written: string[] }[][] };
+
+// ---------------------------------------------------------------- phase 2: analysis
+
+export type BriefSale = { id: string; date: string; stock: string; gain_usd: number; gain_pct: number | null; days_held: number | null; currency: string };
+export type Statistics = {
+  sales: number; not_computed: number; wins: number; losses: number; breakeven: number; win_rate_pct: number | null;
+  gross_wins_usd: number; gross_losses_usd: number; net_usd: number; avg_win_usd: number | null; avg_loss_usd: number | null;
+  avg_win_pct: number | null; avg_loss_pct: number | null; profit_factor: number | null; expectancy_usd: number | null;
+  avg_days_winners: number | null; avg_days_losers: number | null; fx_effect_usd: number;
+  by_holding_period: { label: string; sales: number; gain_usd: number; win_rate_pct: number | null; cost_usd: number; return_pct: number | null }[];
+  best_sales: BriefSale[]; worst_sales: BriefSale[];
+};
+export type YearRow = {
+  year: number; sales: number; not_computed: number; gain_usd: number; wins: number; losses: number; cost_usd: number; proceeds_usd: number;
+  avg_invested_usd: number | null; return_on_invested_pct: number | null; win_rate_pct: number | null;
+  capital_start_usd?: number; capital_added_usd?: number; return_on_capital_pct?: number | null;
+};
+export type Alloc = { label: string; value_usd: number; pct: number | null };
+export type Analysis = {
+  as_of: string; statistics: Statistics; months: { month: string; sales: number; gain_usd: number; wins: number; proceeds_usd: number }[];
+  years: YearRow[]; timeline: { date: string; invested_usd: number; realised_cum_usd: number }[];
+  returns: {
+    realised_usd: number; unrealised_usd: number | null; total_gain_usd: number;
+    money_in_shares: { xirr_pct: number | null; cost_of_shares_sold_usd: number; return_on_cost_sold_pct: number | null; explain: string };
+    capital: null | { deposits_usd: number; withdrawals_usd: number; net_usd: number; end_value_usd: number; simple_return_pct: number | null; xirr_pct: number | null; explain: string };
+  };
+  allocation: { by_broker: Alloc[]; by_currency: Alloc[]; by_stock: Alloc[] };
+  open: { value_usd: number; cost_usd: number; unrealised_usd: number; positions: number };
+  capital_entries: number; capital_problems: string[]; review_pending: number; limits: string;
+};
+export type StockRow = {
+  pool: string; stock: string; stock_key: string; currency: string; buys: number; sells: number; shares_bought: number; shares_sold: number;
+  bought_usd: number; realised_usd: number; realised_not_computed: number; open_shares: number; value_usd: number | null; unrealised_usd: number | null;
+  first: string | null; last: string | null; avg_buy_price: number | null; avg_sell_price: number | null; total_usd: number; total_return_pct: number | null;
+  status: "open" | "closed";
+};
+export type StockDetail = {
+  pool: string; summary: StockRow | null; position: Position | null; as_of: string;
+  trades: { kind: "buy" | "sell"; date: string; shares: number; price: number; row: number; broker: string; value_usd: number | null;
+    gain_usd: number | null; gain_pct?: number | null; days_held?: number | null; id: string; matches?: Match[] }[];
+};
+export type CapitalFlowRow = { id: number; date: string; amount: number; currency: string; account: string | null; note: string | null; usd: number | null; rate: number | null };
+export type CashBlock = { header_row: number; title: string | null; rows: { row: number; label: string | null; original: number | null; usd: number | null }[]; totals: { row: number; label: string; usd: number }[] };
+export type CapitalResp = { flows: CapitalFlowRow[]; problems: string[]; sheet_cash: CashBlock[]; sheet_cash_note: string };

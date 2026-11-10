@@ -107,6 +107,7 @@ class Workbook:
     skipped: list[Skipped]
     position_rows: tuple[int, int]
     sales_rows: tuple[int, int] | None
+    cash: list[dict] = field(default_factory=list)  # the cash block(s) as recorded: header "Orginal | Dollar"
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -239,8 +240,30 @@ def read(data: bytes) -> Workbook:
             r += 1
         if first:
             sales_range = (first, lastr)
+    # ---- cash block(s): a header row with "Orginal"/"Original" | "Dollar", rows until a "Tot …" line
+    cash = []
+    start = (sales_range[1] if sales_range else last) + 1
+    for r in range(start, len(vals) + 1):
+        for c in range(width - 1):
+            if _norm(v(r, c)) in ("orginal", "original") and _norm(v(r, c + 1)) == "dollar":
+                block = {"header_row": r, "title": str(v(r, c - 1)).strip() if c > 0 and v(r, c - 1) not in (None, "") else None,
+                         "rows": [], "totals": []}
+                for rr in range(r + 1, min(r + 60, len(vals) + 1)):
+                    o, u = v(rr, c), v(rr, c + 1)
+                    label = v(rr, c - 1) if c > 0 else None
+                    if isinstance(o, str) and _norm(o).startswith("tot"):
+                        if _num(u) is not None:
+                            block["totals"].append({"row": rr, "label": o.strip(), "usd": _num(u)})
+                        continue
+                    if _num(o) is None and _num(u) is None:
+                        if block["totals"]:
+                            break
+                        continue
+                    block["rows"].append({"row": rr, "label": None if label in (None, "", " ") else str(label).strip(),
+                                          "original": _num(o), "usd": _num(u)})
+                cash.append(block)
     return Workbook(sha256=hashlib.sha256(data).hexdigest(), sheet_name=tab, saved_at=saved_at, positions=positions,
-                    sales=sales, skipped=skipped, position_rows=(2, last), sales_rows=sales_range)
+                    sales=sales, skipped=skipped, position_rows=(2, last), sales_rows=sales_range, cash=cash)
 
 
 def _d(x):
@@ -252,4 +275,4 @@ def from_dict(d: dict) -> Workbook:
     sales = [SaleRow(**{**s, "date": _d(s["date"])}) for s in d["sales"]]
     return Workbook(sha256=d["sha256"], sheet_name=d["sheet_name"], saved_at=d["saved_at"], positions=pos, sales=sales,
                     skipped=[Skipped(**s) for s in d["skipped"]], position_rows=tuple(d["position_rows"]),
-                    sales_rows=tuple(d["sales_rows"]) if d["sales_rows"] else None)
+                    sales_rows=tuple(d["sales_rows"]) if d["sales_rows"] else None, cash=d.get("cash", []))

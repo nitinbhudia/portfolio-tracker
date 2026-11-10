@@ -152,3 +152,43 @@ def check(db: Session = Depends(get_db)):
 @app.post("/api/fx/refresh")
 def fx_refresh(db: Session = Depends(get_db)):
     return P.ensure_fx(db, force=True)
+
+
+# ---------------------------------------------------------------- phase 2: analysis
+
+@app.get("/api/analysis")
+def analysis(db: Session = Depends(get_db)):
+    return P.analysis(db)
+
+
+@app.get("/api/by-stock")
+def by_stock(db: Session = Depends(get_db)):
+    return P.by_stock(db)
+
+
+@app.get("/api/by-stock/detail")
+def stock_detail(pool: str, db: Session = Depends(get_db)):
+    return P.stock_detail(db, pool)
+
+
+class CapitalIn(BaseModel):
+    date: str
+    amount: float
+    currency: str = "USD"
+    account: str | None = None
+    note: str | None = None
+
+
+@app.get("/api/capital")
+def capital(db: Session = Depends(get_db)):
+    return P.capital(db)
+
+
+@app.post("/api/capital")
+def add_capital(body: CapitalIn, db: Session = Depends(get_db)):
+    return P.add_capital(db, body.model_dump())
+
+
+@app.delete("/api/capital/{flow_id}")
+def delete_capital(flow_id: int, db: Session = Depends(get_db)):
+    return P.delete_capital(db, flow_id)

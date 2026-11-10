@@ -1,5 +1,33 @@
 # Development notes
 
+## Phase 2: analysis pages, returns and charts (complete, awaiting approval)
+
+- **Engine** `backend/app/engine/analytics.py`: trading statistics (win rate, average win/loss, profit factor,
+  average per sale, holding period of winners vs losers, by holding period, best/worst sales, currency effect);
+  realised gain per month and year; month-end timeline of money in shares (FIFO cost of holdings) and cumulative
+  realised gain; per stock (buys, sells, average prices, realised + unrealised, total % on everything paid);
+  XIRR (bisection on a bracketed root, so it always converges or says "no answer"); returns.
+- **Returns**: money-weighted return of your trades (purchases in, sales out, open positions at today's value)
+  needs nothing else; return on capital (XIRR and total gain ÷ net capital, and per year: realised ÷ (capital at
+  the start of the year + money added)) uses the deposits/withdrawals you enter (`capital_flows` table, any
+  currency, converted at the ECB rate of the day).
+- **Importer**: also reads the sheet's cash block(s) as recorded (shown on the Returns page, not used).
+- **API**: `/api/analysis`, `/api/by-stock`, `/api/by-stock/detail?pool=`, `/api/capital` (GET/POST/DELETE).
+- **UI**: Overview (KPI tiles, realised per year, money in shares vs cumulative realised, allocation by
+  broker/currency/stock), Per stock (table + drill-down with every trade and its FIFO matches), Per year (years and
+  month by month), Returns (deposits form, both kinds of return, cash block), Statistics. Charts are plain SVG
+  (`components/charts.tsx`): validated palette (blue/orange lines, blue/red gain/loss, both modes), 2px lines,
+  ≤24px columns with a 4px rounded data end, hairline grid, hover/focus tooltips, legends, tables beside every chart.
+- **Tests**: 7 more backend (XIRR known values, statistics/months/years/timeline/returns by hand, cash block,
+  analysis/per-stock/capital API incl. "money in shares at the end = FIFO cost held") → 31; frontend chart ticks.
+  Browser-checked at 1300/1400 and 390 px, light and dark, with a deposit added and deleted and a drill-down opened.
+
+### Decisions
+
+- **Only computable numbers**: no per-year total return or past values (no price history); deposits are never
+  inferred from the cash block (it holds balances).
+- **XIRR of your trades** as the headline return until deposits are entered: it needs nothing beyond the trades.
+
 ## Phase 1: import, review, FIFO, check figures (complete, awaiting approval)
 
 - **Importer** `backend/app/importer/live_portfolio.py`: finds the tab named "Live Portfolio" (ignoring spaces
