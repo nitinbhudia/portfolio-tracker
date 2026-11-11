@@ -62,7 +62,7 @@ function TradeForm({ stocks, currencies, editing, onSaved, onCancel }: {
 
 function SheetTradeEditor({ t, onSaved, onClose }: { t: TradeRow; onSaved: (r: TradesResp) => void; onClose: () => void }) {
   const [fee, setFee] = useState(t.fee ? String(t.fee) : "");
-  const [c, setC] = useState({ date: "", shares: "", price: "", sell: "", currency: "" });
+  const [c, setC] = useState({ date: "", shares: "", price: "", sell: "", currency: "", name: "" });
   const [err, setErr] = useState<string | null>(null);
   const run = async (fn: () => Promise<TradesResp>) => {
     setErr(null);
@@ -79,6 +79,7 @@ function SheetTradeEditor({ t, onSaved, onClose }: { t: TradeRow; onSaved: (r: T
   if (c.price) fields.price = Number(c.price);
   if (c.sell) fields.live_price = Number(c.sell);
   if (c.currency) fields.currency = c.currency.toUpperCase();
+  if (c.name.trim()) fields.name = c.name.trim();
   const L = "flex flex-col text-xs";
   return (
     <Section title={`${t.kind === "buy" ? "Purchase" : "Sale"} from the sheet: ${t.stock}, row ${t.row}`} right={<button className="text-sm underline" onClick={onClose}>close</button>}>
@@ -94,6 +95,7 @@ function SheetTradeEditor({ t, onSaved, onClose }: { t: TradeRow; onSaved: (r: T
           {t.kind === "buy"
             ? <label className={L}>Buy price<input aria-label="Corrected buy price" className={`${input} w-24`} value={c.price} onChange={(e) => setC({ ...c, price: e.target.value })} /></label>
             : <label className={L}>Sell price<input aria-label="Corrected sell price" className={`${input} w-24`} value={c.sell} onChange={(e) => setC({ ...c, sell: e.target.value })} /></label>}
+          <label className={L}>Stock name<input aria-label="Corrected stock name" className={`${input} w-36`} placeholder={t.stock} value={c.name} onChange={(e) => setC({ ...c, name: e.target.value })} /></label>
           <label className={L}>Currency<input aria-label="Corrected currency" className={`${input} w-16 uppercase`} value={c.currency} onChange={(e) => setC({ ...c, currency: e.target.value })} /></label>
           <button className={btn} disabled={!Object.keys(fields).length} onClick={() => run(() => apiFetch(`/api/trades/${t.id}/correct`, jsonInit("PUT", { fields })))}>Save correction</button>
         </div>

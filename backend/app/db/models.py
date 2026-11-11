@@ -159,3 +159,23 @@ class AssistantChat(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     messages: Mapped[list] = mapped_column(JSON, default=list)
     display: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class StockPrice(Base):
+    """Daily close of a stock: `series` is a US ticker (from Tiingo) or "csv:<pool>" (a file you uploaded)."""
+    __tablename__ = "stock_prices"
+    series: Mapped[str] = mapped_column(String(240), primary_key=True)
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    close: Mapped[float] = mapped_column(Float)
+    split: Mapped[float] = mapped_column(Float, default=1.0)  # split factor on that day (Tiingo); 1 = none
+
+
+class PriceFetch(Base):
+    """Download progress per ticker, so a download interrupted by the hourly limit resumes where it stopped."""
+    __tablename__ = "price_fetches"
+    series: Mapped[str] = mapped_column(String(240), primary_key=True)
+    fetched_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    fetched_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(20))  # ok | not_found | error
+    message: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)

@@ -25,5 +25,5 @@ body { @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 a
 }
 :root { --viz-mid: #f0efec; }
 .dark { --viz-mid: #383835; }
-:root { --viz-3: #1baf7a; --viz-4: #eda100; --viz-5: #e87ba4; }
-.dark { --viz-3: #199e70; --viz-4: #c98500; --viz-5: #d55181; }
+:root { --viz-3: #1baf7a; --viz-4: #eda100; --viz-5: #e87ba4; --viz-6: #008300; --viz-7: #6250d6; --viz-8: #e34948; }
+.dark { --viz-3: #199e70; --viz-4: #c98500; --viz-5: #d55181; --viz-6: #008300; --viz-7: #9085e9; --viz-8: #e66767; }

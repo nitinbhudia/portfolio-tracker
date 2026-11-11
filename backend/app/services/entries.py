@@ -139,21 +139,32 @@ def set_fee(db: Session, trade_id: str, amount) -> dict:
     return trades(db)
 
 
-CORRECTABLE = {"date": "date", "sale_date": "date", "shares": "num+", "price": "num", "live_price": "num", "currency": "cur"}
+CORRECTABLE = {"date": "date", "sale_date": "date", "shares": "num+", "price": "num", "live_price": "num", "currency": "cur",
+               "name": "text"}  # name: e.g. a row written as "Lumentum" that was really another stock
 
 
 def correct(db: Session, trade_id: str, fields: dict) -> dict:
     """Correct a trade from the sheet. Stored like a review decision (on the row, with its fingerprint), so it is
     kept across re-imports of the same row and dropped (and reported) if the row changes in the sheet."""
     st = P._need(db)
-    if not trade_id or trade_id[0] not in "BS" or not trade_id[1:].isdigit() or trade_id not in {t.id for t in st["rb"].trades}:
+    if not trade_id or trade_id[0] not in "BS" or not trade_id[1:].isdigit():
         raise NotFound(f"no trade {trade_id} from the sheet")
     key = f"P{trade_id[1:]}"
+    if trade_id not in {t.id for t in st["rb"].trades}:
+        # a row waiting in Review (e.g. a sale whose purchase was renamed) can still get its name corrected
+        if not (set(fields or {}) == {"name"} and key in st["fingerprints"]):
+            raise NotFound(f"no trade {trade_id} from the sheet")
     clean = {}
     for k, v in (fields or {}).items():
         if k not in CORRECTABLE:
             raise BadRequest(f"can't change {k}")
         kind = CORRECTABLE[k]
+        if kind == "text":
+            name = str(v or "").strip()
+            if not name or len(name) > 200:
+                raise BadRequest("the stock name must be 1 to 200 characters")
+            clean[k] = name
+            continue
         clean[k] = (_date(v, k).isoformat() if kind == "date" else _cur(v) if kind == "cur"
                     else _num(v, k, positive=kind == "num+"))
     if "sale_date" in clean and trade_id[0] != "S":

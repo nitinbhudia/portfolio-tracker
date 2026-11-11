@@ -99,9 +99,13 @@ export function Columns({ data, height = 220, fmt, label, onPick }: {
 }
 
 /** Lines over time, one shared USD axis; crosshair snaps to the nearest date and lists every series. */
-export function Lines({ dates, series, height = 240, fmt, label }: {
+export function Lines({ dates, series: allSeries, height = 240, fmt, label, hideable = false }: {
   dates: string[]; series: { name: string; color: string; values: (number | null)[] }[]; height?: number; fmt: (v: number) => string; label: string;
+  /** Legend entries become buttons that hide/show their line. */
+  hideable?: boolean;
 }) {
+  const [hidden, setHidden] = useState<string[]>([]);
+  const series = allSeries.filter((s) => !hidden.includes(s.name));
   const wrap = useRef<HTMLDivElement>(null);
   const W = useWidth(wrap);
   const [idx, setIdx] = useState<number | null>(null);
@@ -153,10 +157,15 @@ export function Lines({ dates, series, height = 240, fmt, label }: {
         {idx !== null && series.map((s) => s.values[idx] === null ? null : <circle key={s.name} cx={x(idx)} cy={y(s.values[idx] as number)} r={4} fill={s.color} stroke="var(--viz-surface)" strokeWidth={2} />)}
       </svg>
       <div className="mt-1 flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-300">
-        {series.map((s) => (
-          <span key={s.name} className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-4 rounded" style={{ background: s.color }} />{s.name}:{" "}
-            <b className="num">{(() => { const v = [...s.values].reverse().find((z) => z !== null); return v == null ? "—" : fmt(v); })()}</b></span>
-        ))}
+        {allSeries.map((s) => {
+          const off = hidden.includes(s.name);
+          const body = <><span className="inline-block h-0.5 w-4 rounded" style={{ background: off ? "var(--viz-axis)" : s.color }} />{s.name}:{" "}
+            <b className="num">{(() => { const v = [...s.values].reverse().find((z) => z !== null); return v == null ? "—" : fmt(v); })()}</b></>;
+          return hideable
+            ? <button key={s.name} aria-pressed={!off} title={off ? "Show" : "Hide"} className={`flex items-center gap-1.5 ${off ? "opacity-50 line-through" : ""}`}
+                onClick={() => setHidden(off ? hidden.filter((h) => h !== s.name) : [...hidden, s.name])}>{body}</button>
+            : <span key={s.name} className="flex items-center gap-1.5">{body}</span>;
+        })}
       </div>
       {idx !== null && (
         <Tooltip tip={{ x: Math.min(Math.max(x(idx), 80), W - 80), y: PAD.t + 16, lines: [[dates[idx], ""], ...series.map((s) => [s.name, s.values[idx] === null ? "—" : fmt(s.values[idx] as number)] as [string, string])] }} />
@@ -186,5 +195,74 @@ export function RankedBars({ rows, fmt, max = 12 }: { rows: { label: string; val
     </ul>
     {rest.length > 0 && <p className="mt-2 text-xs text-slate-500">and {rest.length} more: {fmt(restValue)} · {restPct.toFixed(1)}%</p>}
     </>
+  );
+}
+
+
+/** Overview strip under a time chart: the whole history, with a draggable window (the visible range).
+ * Drag the window to pan, drag an edge to zoom; arrow keys move a focused edge or window. */
+export function Navigator({ dates, values, start, end, onChange }: {
+  dates: string[]; values: number[]; start: string | null; end: string; onChange: (start: string, end: string) => void;
+}) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const W = useWidth(wrap);
+  const H = 48, n = dates.length;
+  const first = (d: string | null) => { if (!d) return 0; const i = dates.findIndex((x) => x >= d); return i < 0 ? n - 1 : i; };
+  const last = (d: string) => { let i = n - 1; while (i > 0 && dates[i] > d) i--; return i; };
+  const [drag, setDrag] = useState<{ kind: "a" | "b" | "w"; x0: number; a0: number; b0: number } | null>(null);
+  const [win, setWin] = useState<[number, number] | null>(null);
+  const a = win ? win[0] : first(start);
+  const b = win ? win[1] : Math.max(a, last(end));
+  if (n < 2) return null;
+  const lo = Math.min(...values), hi = Math.max(...values);
+  const x = (i: number) => (i / (n - 1)) * W;
+  const y = (v: number) => 4 + ((hi - v) / (hi - lo || 1)) * (H - 8);
+  const step = Math.max(1, Math.floor(n / 400));
+  let path = "";
+  for (let i = 0; i < n; i += step) path += `${i ? "L" : "M"}${x(i).toFixed(1)},${y(values[i]).toFixed(1)} `;
+  const toIdx = (px: number) => Math.round((px / W) * (n - 1));
+  const commit = (lo2: number, hi2: number) => { setWin(null); onChange(dates[lo2], dates[hi2]); };
+  const move = (e: React.PointerEvent) => {
+    if (!drag) return;
+    const delta = toIdx(e.clientX - drag.x0);
+    let na = drag.a0, nb = drag.b0;
+    if (drag.kind === "a") na = Math.min(Math.max(0, drag.a0 + delta), drag.b0 - 1);
+    else if (drag.kind === "b") nb = Math.max(Math.min(n - 1, drag.b0 + delta), drag.a0 + 1);
+    else { const w = drag.b0 - drag.a0; na = Math.min(Math.max(0, drag.a0 + delta), n - 1 - w); nb = na + w; }
+    setWin([na, nb]);
+  };
+  const down = (kind: "a" | "b" | "w") => (e: React.PointerEvent) => {
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    setDrag({ kind, x0: e.clientX, a0: a, b0: b });
+  };
+  const up = () => { if (drag && win) commit(win[0], win[1]); setDrag(null); };
+  const key = (kind: "a" | "b" | "w") => (e: React.KeyboardEvent) => {
+    const s = Math.max(1, Math.round(n / 40)) * (e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0);
+    if (!s) return;
+    e.preventDefault();
+    if (kind === "a") commit(Math.min(Math.max(0, a + s), b - 1), b);
+    else if (kind === "b") commit(a, Math.max(Math.min(n - 1, b + s), a + 1));
+    else { const w = b - a; const na = Math.min(Math.max(0, a + s), n - 1 - w); commit(na, na + w); }
+  };
+  const handle = "fill-white stroke-slate-400 dark:fill-slate-800 dark:stroke-slate-500";
+  return (
+    <div ref={wrap} className="relative mt-2 select-none" onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block touch-none" role="group" aria-label={`Range ${dates[a]} to ${dates[b]}; drag to change`}>
+        <rect x={0} y={0} width={W} height={H} rx={4} fill="var(--viz-grid)" opacity={0.35} />
+        <path d={path} fill="none" stroke="var(--viz-muted)" strokeWidth={1} />
+        <rect x={0} y={0} width={x(a)} height={H} fill="var(--viz-surface)" opacity={0.6} />
+        <rect x={x(b)} y={0} width={W - x(b)} height={H} fill="var(--viz-surface)" opacity={0.6} />
+        <rect x={x(a)} y={1} width={Math.max(2, x(b) - x(a))} height={H - 2} fill="var(--viz-1)" fillOpacity={0.12} stroke="var(--viz-1)" strokeWidth={1}
+          style={{ cursor: "grab" }} tabIndex={0} role="slider" aria-label="Visible window" aria-valuetext={`${dates[a]} to ${dates[b]}`}
+          onPointerDown={down("w")} onKeyDown={key("w")} />
+        {(["a", "b"] as const).map((k) => (
+          <rect key={k} x={x(k === "a" ? a : b) - 5} y={H / 2 - 12} width={10} height={24} rx={3} className={handle} strokeWidth={1}
+            style={{ cursor: "ew-resize" }} tabIndex={0} role="slider" aria-label={k === "a" ? "Start of range" : "End of range"}
+            aria-valuetext={dates[k === "a" ? a : b]} onPointerDown={down(k)} onKeyDown={key(k)} />
+        ))}
+      </svg>
+      <div className="mt-0.5 flex justify-between text-[10px] text-slate-500"><span>{dates[0]}</span><span>drag the window or its edges</span><span>{dates[n - 1]}</span></div>
+    </div>
   );
 }
