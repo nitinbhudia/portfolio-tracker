@@ -46,7 +46,17 @@ If a port is busy, the script says which program is using it. Stop the app with 
    download fails, the page says why for that index and you can upload a CSV for it: the daily-history download of most
    finance sites works (US, UK and European date formats, Close / Close/Last / Price columns).
 8. **Time range**: the buttons at the top (1M, 3M, 6M, YTD, 1Y, 3Y, 5Y, All, or your own dates) change every chart.
-9. **Explore**: interactive drill-down charts. A portfolio map (size = value, colour = gain/loss %): click a sector, then a
+9. **Performance**: profit/loss over time (total, open positions, closed positions) with a draggable overview strip to
+   zoom, market value against cost (optionally including everything already sold), allocation by stock or sector, and
+   monthly P/L in USD or %. Click a legend entry to hide a line; click a month for its split.
+   Needs **daily prices** for your stocks (Data ▾ Price history): US stocks from Tiingo (free key: add
+   `TIINGO_API_KEY=` to `.env`; set each stock's ticker on that page, then Download; the free plan allows about 50
+   requests an hour, so a first download of a few hundred tickers runs in the background for several hours and resumes
+   by itself), other listings from a CSV per stock (e.g. Investing.com's Historical Data download). Stocks without
+   daily prices are valued at their last trade price, and the page says how much of the value is estimated that way.
+   The page also flags trades whose price is far from the same stock's other trades within a month (usually two stocks
+   written with the same name); fix the name on Data ▾ Trades → correct.
+   **Explore**: interactive drill-down charts. A portfolio map (size = value, colour = gain/loss %): click a sector, then a
    stock, then see its purchase lots. Realised gains over time: click a year, then a month, then a sale to see which
    purchases it sold (FIFO). A trail above each chart takes you back up; hover or tab to anything for details.
    **What-if**: "if I sold now" for one stock, several, a sector or everything (FIFO gain per purchase lot, before tax),

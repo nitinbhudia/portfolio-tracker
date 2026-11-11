@@ -234,3 +234,13 @@ export type ExLot = { bought: string; broker: string; shares: number; buy_price:
 export type ExPosition = { pool: string; stock: string; sector: string; currency: string; pence: boolean; shares: number; price: number;
   value_usd: number; cost_usd: number | null; gain_usd: number | null; lots: ExLot[] };
 export type ExPortfolio = { as_of: string; total_usd: number; positions: ExPosition[] };
+
+export type PerfMonth = { month: string; change_usd: number; change_pct: number | null; closed_usd: number; open_usd: number; value_end_usd: number; total_end_usd: number };
+export type Performance = { as_of: string; dates: string[]; value: number[]; cost: number[]; realised: number[]; open_pl: number[]; total: number[];
+  sold_proceeds: number[]; sold_cost: number[]; estimated: number[]; problems: string[]; months: PerfMonth[]; estimated_now_pct: number | null; note: string };
+export type PHPool = { pool: string; stock: string; group_key: string; currency: string; pence: boolean; open: boolean; first_trade: string; last_trade: string;
+  ticker: string | null; ticker_allowed: boolean; source: "tiingo" | "csv" | "trades"; coverage: { days: number; first: string; last: string } | null;
+  fetch_status: string | null; fetch_message: string | null; warnings: string[] };
+export type PriceHistory = { key: boolean; running: boolean; waiting_until: string | null; message: string | null; last_run: string | null; queue: number | null;
+  pools: PHPool[]; setup: string;
+  counts: { pools: number; open: number; tiingo: number; csv: number; trades_only: number; open_trades_only: number; no_ticker_usd: number; warnings: number } };

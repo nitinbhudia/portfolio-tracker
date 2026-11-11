@@ -16,6 +16,7 @@ load_env()  # .env in the app folder (git-ignored): ANTHROPIC_API_KEY for the as
 from app.db import models as m  # noqa: E402
 from app.services import benchmarks as BMS  # noqa: E402
 from app.services import entries as E  # noqa: E402
+from app.services import history as HS  # noqa: E402
 from app.services import assistant as AS  # noqa: E402
 from app.services import portfolio as P  # noqa: E402
 from app.services import whatif as WS  # noqa: E402
@@ -452,3 +453,49 @@ def assistant_ask(body: AskIn, db: Session = Depends(get_db)):
 @app.get("/api/assistant/chats/{chat_id}")
 def assistant_chat(chat_id: int, db: Session = Depends(get_db)):
     return AS.get_chat(db, chat_id)
+
+
+# ---------------------------------------------------------------- price history and performance
+
+@app.get("/api/performance")
+def performance(db: Session = Depends(get_db)):
+    return HS.performance(db)
+
+
+@app.get("/api/price-history")
+def price_history(db: Session = Depends(get_db)):
+    return HS.status(db)
+
+
+@app.post("/api/price-history/download")
+def price_history_download(wait: bool = False, limit: int | None = None, db: Session = Depends(get_db)):
+    if wait:  # run in this request (tests, scripts); the app uses the background download
+        return {**HS.run_batch(db, limit), "status": HS.status(db)}
+    return HS.start_download(db)
+
+
+@app.post("/api/price-history/stop")
+def price_history_stop(db: Session = Depends(get_db)):
+    return HS.stop_download(db)
+
+
+@app.post("/api/price-history/csv")
+async def price_history_csv(pool: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    data = await file.read(10 * 1024 * 1024 + 1)
+    if len(data) > 10 * 1024 * 1024:
+        raise P.BadRequest("The file is larger than 10 MB.")
+    return HS.upload_csv(db, pool, data)
+
+
+@app.delete("/api/price-history/csv")
+def price_history_csv_delete(pool: str, db: Session = Depends(get_db)):
+    return HS.delete_csv(db, pool)
+
+
+class TickerIn(BaseModel):
+    ticker: str | None
+
+
+@app.put("/api/price-history/ticker/{group_key}")
+def price_history_ticker(group_key: str, body: TickerIn, db: Session = Depends(get_db)):
+    return HS.set_ticker(db, group_key, body.ticker)
