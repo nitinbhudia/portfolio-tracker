@@ -145,7 +145,7 @@ def test_price_line_and_months_by_hand():
 
 def test_odd_trade_prices_are_flagged():
     from types import SimpleNamespace as NS
-    ts = [NS(pool="l|USD", stock="Lumentum", kind=k, date=date(2026, 7, d), row=r, price=p)
+    ts = [NS(id=f"X{r}", pool="l|USD", stock="Lumentum", kind=k, date=date(2026, 7, d), row=r, price=p, shares=1.0, currency="USD")
           for k, d, r, p in [("buy", 1, 1, 810.0), ("buy", 10, 2, 6.76), ("buy", 14, 3, 820.0), ("sell", 16, 4, 728.0), ("sell", 28, 5, 6.03)]]
     out = H.odd_prices(ts)
     assert len(out) == 2 and "sheet row 2" in out[0] and "sheet row 5" in out[1]
@@ -170,3 +170,20 @@ def test_rename_a_sale_waiting_in_review(client):  # noqa: F811
     assert ts["S3"]["stock"] == "Other Co" and ts["B2"]["stock"] == "Other Co"
     assert client.put("/api/trades/S3/correct", json={"fields": {"shares": 10}}).status_code == 200  # a trade again
     assert client.put("/api/trades/S77/correct", json={"fields": {"name": "x"}}).status_code == 404
+
+
+def test_flagged_trades_rename_and_ignore(client):  # noqa: F811
+    upload(client)
+    for d, px in [("2024-02-05", 112), ("2024-02-10", 1.1)]:  # Alpha around 110, then one at 1.10: a different stock?
+        r = client.post("/api/trades", json={"kind": "buy", "date": d, "name": "Alpha Corp", "shares": 1, "price": px, "currency": "USD"})
+        assert r.status_code == 200, r.text
+    odd = client.get("/api/performance").json()["odd_trades"]
+    assert [(x["date"], x["price"]) for x in odd] == [("2024-02-10", 1.1)] and odd[0]["typical"] > 100
+    assert client.post("/api/performance/odd-trades/ignore", json={"items": odd}).json()["ignored"] == 1
+    assert client.get("/api/performance").json()["odd_trades"] == []
+    # rename a purchase and its sale in one go (sales first)
+    r = client.post("/api/trades/rename", json={"ids": ["B2", "S3"], "name": "Other Co"})
+    assert r.status_code == 200 and r.json()["renamed"] == 2
+    ts = {t["id"]: t["stock"] for t in client.get("/api/trades").json()["trades"]}
+    assert ts["B2"] == ts["S3"] == "Other Co"
+    assert client.post("/api/trades/rename", json={"ids": [], "name": "x"}).status_code == 400

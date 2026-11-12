@@ -5,9 +5,9 @@ import { useMemo, useState } from "react";
 
 import { Columns, Lines, Navigator, Tooltip, type Tip } from "@/components/charts";
 import { RangePicker, useRange } from "@/components/RangePicker";
-import { ErrorBox, Loading, Note, Section, Stat, Usd } from "@/components/ui";
-import { type Performance, type WIOverview, useApi } from "@/lib/api";
-import { pct, usd } from "@/lib/format";
+import { ErrorBox, Loading, Note, Section, Stat, Usd, btn, btnPrimary, input } from "@/components/ui";
+import { ApiError, apiFetch, jsonInit, type OddTrade, type Performance, type PriceHistory, type WIOverview, useApi } from "@/lib/api";
+import { num, pct, qty, usd } from "@/lib/format";
 import { inRange, resolve } from "@/lib/range";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -83,11 +83,8 @@ export default function PerformancePage() {
         <h1 className="text-xl font-semibold">Performance</h1>
         <RangePicker />
       </div>
-      {d.problems.length > 0 && (
-        <Note><b>Check {d.problems.length === 1 ? "this trade" : `these ${d.problems.length} trades`}</b> — they can distort the charts:
-          <ul className="mt-1 list-disc pl-5">{d.problems.slice(0, 8).map((x, i) => <li key={i}>{x}</li>)}</ul>
-          {d.problems.length > 8 && <span>…and {d.problems.length - 8} more.</span>}</Note>
-      )}
+      {d.odd_trades.length > 0 && <OddTrades items={d.odd_trades} onDone={q.reload} />}
+      {d.problems.length > 0 && <Note>{d.problems.join(" ")}</Note>}
       {estPct > 5 && (
         <Note>{pct(estPct, 0, false)} of today&apos;s value has no daily price history, so those positions are valued at their last trade price until the
           sheet&apos;s current price, and their gains or losses show up in jumps rather than day by day. Download prices on{" "}
@@ -149,5 +146,46 @@ function MonthBars({ months, unit }: { months: Performance["months"]; unit: "usd
         </div>
       )}
     </>
+  );
+}
+
+/** Trades priced far from the same stock's other trades that month: usually another stock written with the same name.
+ * Rename them (e.g. "Lumentum" -> "Lumen Tech") or mark them as correct. */
+function OddTrades({ items, onDone }: { items: OddTrade[]; onDone: () => void }) {
+  const names = useApi<PriceHistory>("/api/price-history");
+  const groups = Object.values(items.reduce<Record<string, OddTrade[]>>((a, x) => ({ ...a, [x.pool]: [...(a[x.pool] ?? []), x] }), {}));
+  return (
+    <Note>
+      <b>Check {items.length === 1 ? "this trade" : `these ${items.length} trades`}</b>: each is priced far from the same stock&apos;s other trades
+      that month, so it is probably a different stock with a similar name. Until it&apos;s fixed it distorts the charts (e.g. a spike).
+      <datalist id="stock-names">{[...new Set((names.data?.pools ?? []).map((p) => p.stock))].sort().map((n) => <option key={n} value={n} />)}</datalist>
+      <div className="mt-2 space-y-3">{groups.map((g) => <OddGroup key={g[0].pool} g={g} onDone={onDone} />)}</div>
+    </Note>
+  );
+}
+
+function OddGroup({ g, onDone }: { g: OddTrade[]; onDone: () => void }) {
+  const [name, setName] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const run = async (f: () => Promise<unknown>) => {
+    setErr(null);
+    try { await f(); onDone(); } catch (e) { setErr(e instanceof ApiError ? e.message : String(e)); }
+  };
+  return (
+    <div className="rounded border border-amber-300 bg-white/60 p-2 text-slate-800 dark:border-amber-700 dark:bg-slate-900/40 dark:text-slate-100">
+      <p className="text-sm"><b>{g[0].stock}</b> usually traded around {num(g[0].typical)} {g[0].currency} at the time, but:</p>
+      <ul className="mt-1 list-disc pl-5 text-sm">{g.map((x) => (
+        <li key={x.id} className="num">{x.kind === "buy" ? "Bought" : "Sold"} {qty(x.shares)} at {num(x.price, 4)} on {x.date} (sheet row {x.row})</li>))}</ul>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+        <label className="flex items-center gap-1.5">Rename {g.length === 1 ? "it" : "them"} to
+          <input aria-label={`Correct stock name for the ${g[0].stock} rows`} list="stock-names" className={`${input} w-44`} placeholder="e.g. Lumen Tech"
+            value={name} onChange={(e) => setName(e.target.value)} /></label>
+        <button className={btnPrimary} disabled={!name.trim() || g.some((x) => x.id.startsWith("M"))}
+          onClick={() => run(() => apiFetch("/api/trades/rename", jsonInit("POST", { ids: g.map((x) => x.id), name: name.trim() })))}>Rename</button>
+        <button className={btn} onClick={() => run(() => apiFetch("/api/performance/odd-trades/ignore", jsonInit("POST", { items: g })))}>They&apos;re correct</button>
+      </div>
+      {g.some((x) => x.id.startsWith("M")) && <p className="mt-1 text-xs">Trades you entered in the app: edit them on Data ▾ Trades.</p>}
+      {err && <p className="mt-1 text-sm text-rose-700 dark:text-rose-400">{err}</p>}
+    </div>
   );
 }

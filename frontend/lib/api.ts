@@ -236,7 +236,8 @@ export type ExPosition = { pool: string; stock: string; sector: string; currency
 export type ExPortfolio = { as_of: string; total_usd: number; positions: ExPosition[] };
 
 export type PerfMonth = { month: string; change_usd: number; change_pct: number | null; closed_usd: number; open_usd: number; value_end_usd: number; total_end_usd: number };
-export type Performance = { as_of: string; dates: string[]; value: number[]; cost: number[]; realised: number[]; open_pl: number[]; total: number[];
+export type OddTrade = { id: string; kind: "buy" | "sell"; stock: string; pool: string; date: string; row: number; shares: number; price: number; typical: number; currency: string };
+export type Performance = { odd_trades: OddTrade[]; as_of: string; dates: string[]; value: number[]; cost: number[]; realised: number[]; open_pl: number[]; total: number[];
   sold_proceeds: number[]; sold_cost: number[]; estimated: number[]; problems: string[]; months: PerfMonth[]; estimated_now_pct: number | null; note: string };
 export type PHPool = { pool: string; stock: string; group_key: string; currency: string; pence: boolean; open: boolean; first_trade: string; last_trade: string;
   ticker: string | null; ticker_allowed: boolean; source: "tiingo" | "csv" | "trades"; coverage: { days: number; first: string; last: string } | null;
