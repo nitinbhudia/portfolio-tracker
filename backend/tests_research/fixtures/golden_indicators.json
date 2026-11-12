@@ -1,0 +1,6 @@
+{
+  "_comment": "Hand-checkable golden values. See tests/test_indicators.py for the derivations.",
+  "sma_basic": {"closes": "1..30", "sma10_at_9": 5.5, "sma10_at_29": 25.5, "sma20_at_19": 10.5, "sma20_at_29": 20.5},
+  "rsi_alternating": {"changes": "+1,-1 alternating x14 then +1", "rsi_at_14": 50.0, "rsi_at_15": 53.57142857142857},
+  "atr_gap_up": {"tr_gap_bar": 7.0}
+}

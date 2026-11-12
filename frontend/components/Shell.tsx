@@ -21,6 +21,7 @@ const NAV = [
   { href: "/explore", label: "Explore" },
   { href: "/whatif", label: "What-if" },
   { href: "/ask", label: "Ask" },
+  { href: "/research", label: "Research" },
 ];
 // Entering and maintaining data: grouped under one menu.
 const DATA = [
@@ -73,17 +74,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <RangeProvider>
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2">
-          <Link href="/" className="font-semibold tracking-tight">Portfolio Tracker</Link>
-          <nav className="hidden gap-0.5 lg:flex">
+          <Link href="/" className="whitespace-nowrap font-semibold tracking-tight">Portfolio Tracker</Link>
+          <nav className="hidden gap-0.5 xl:flex">
             {NAV.map((n) => (
               <Link key={n.href} href={n.href}
-                className={`rounded px-2.5 py-1.5 text-sm ${active(n.href) ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
+                className={`whitespace-nowrap rounded px-2 py-1.5 text-sm ${active(n.href) ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
                 {n.label}{badge(n.href)}
               </Link>
             ))}
             <div className="relative">
               <button aria-expanded={dataOpen} aria-haspopup="true" onClick={() => setDataOpen(!dataOpen)}
-                className={`rounded px-2.5 py-1.5 text-sm ${DATA.some((n) => active(n.href)) ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
+                className={`whitespace-nowrap rounded px-2 py-1.5 text-sm ${DATA.some((n) => active(n.href)) ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
                 Data{pending > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${pending} rows to review`}>{pending}</span>} ▾
               </button>
               {dataOpen && (
@@ -100,11 +101,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div className="ml-auto flex items-center gap-2">
             <button aria-label="Toggle dark mode" onClick={() => { localStorage.setItem("theme", dark ? "light" : "dark"); setDark(!dark); }}
               className="rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-700">{dark ? "☀ Light" : "☾ Dark"}</button>
-            <button aria-label="Menu" onClick={() => setOpen(!open)} className="rounded border border-slate-300 px-2 py-1 text-xs lg:hidden dark:border-slate-700">☰</button>
+            <button aria-label="Menu" onClick={() => setOpen(!open)} className="rounded border border-slate-300 px-2 py-1 text-xs xl:hidden dark:border-slate-700">☰</button>
           </div>
         </div>
         {open && (
-          <nav className="flex flex-col border-t border-slate-200 px-4 py-2 lg:hidden dark:border-slate-800">
+          <nav className="flex flex-col border-t border-slate-200 px-4 py-2 xl:hidden dark:border-slate-800">
             {NAV.map((n) => <Link key={n.href} href={n.href} className={`rounded px-2 py-2 text-sm ${active(n.href) ? "font-semibold" : ""}`}>{n.label}{badge(n.href)}</Link>)}
             <div className="mt-2 border-t border-slate-200 px-2 pt-2 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800">Data</div>
             {DATA.map((n) => <Link key={n.href} href={n.href} className={`rounded px-2 py-2 text-sm ${active(n.href) ? "font-semibold" : ""}`}>{n.label}{badge(n.href)}</Link>)}

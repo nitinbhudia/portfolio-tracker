@@ -482,6 +482,7 @@ def positions(db: Session) -> dict:
         cost_usd = None if g["cost_usd_missing"] else g["cost_usd"]
         unreal = value_usd - cost_usd if value_usd is not None and cost_usd is not None else None
         out.append({**{k: v for k, v in g.items() if k not in ("cost_usd_missing", "scale")}, "pool": pool, "cost_usd": cost_usd,
+                    "ticker": st["tickers"].get(g["stock_key"]) if g["currency"] == "USD" else None,
                     "avg_cost": g["cost_local"] / (g["shares"] * g["scale"]) if g["shares"] else None,
                     "price": price, "price_from_row": px["row"] if px else None, "price_date": pdate.isoformat() if px else None,
                     "price_source": px["source"] if px else None, "pence": g["scale"] == 0.01, "value_local": value_local,
