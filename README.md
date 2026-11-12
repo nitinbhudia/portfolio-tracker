@@ -46,7 +46,13 @@ If a port is busy, the script says which program is using it. Stop the app with 
    download fails, the page says why for that index and you can upload a CSV for it: the daily-history download of most
    finance sites works (US, UK and European date formats, Close / Close/Last / Price columns).
 8. **Time range**: the buttons at the top (1M, 3M, 6M, YTD, 1Y, 3Y, 5Y, All, or your own dates) change every chart.
-9. **Performance**: profit/loss over time (total, open positions, closed positions) with a draggable overview strip to
+9. **Gains by group** (Overview): your own groups of sales (e.g. Alpha picks, Trading, Mag 7, EU, Quant Pro, Crypto)
+   are read from the workbook on every import: the row of group names under the sales log, and the formula under each
+   name adding up that group's sales-log rows (`=G1539+G1533+…`, `SUM(…)` ranges, or a reference to another cell of the
+   block, like `=E1996`). The app shows each group's FIFO gain in USD, per year, its win rate and the sheet's own total.
+   Click a group to see its sales and move one to another group (kept across imports); sales no formula includes, or
+   entered in the app, are "Not grouped". Rows in two groups, or formula references outside the sales log, are listed.
+   **Performance**: profit/loss over time (total, open positions, closed positions) with a draggable overview strip to
    zoom, market value against cost (optionally including everything already sold), allocation by stock or sector, and
    monthly P/L in USD or %. Click a legend entry to hide a line; click a month for its split.
    Needs **daily prices** for your stocks (Data ▾ Price history): US stocks from Tiingo (free key: add

@@ -16,6 +16,7 @@ load_env()  # .env in the app folder (git-ignored): ANTHROPIC_API_KEY for the as
 from app.db import models as m  # noqa: E402
 from app.services import benchmarks as BMS  # noqa: E402
 from app.services import entries as E  # noqa: E402
+from app.services import groups as GS  # noqa: E402
 from app.services import history as HS  # noqa: E402
 from app.services import assistant as AS  # noqa: E402
 from app.services import portfolio as P  # noqa: E402
@@ -518,3 +519,20 @@ class OddIgnoreIn(BaseModel):
 @app.post("/api/performance/odd-trades/ignore")
 def ignore_odd_trades(body: OddIgnoreIn, db: Session = Depends(get_db)):
     return HS.ignore_odd(db, body.items)
+
+
+# ---------------------------------------------------------------- your sale groups
+
+@app.get("/api/groups")
+def groups(db: Session = Depends(get_db)):
+    return GS.view(db)
+
+
+class GroupAssignIn(BaseModel):
+    ids: list[str]
+    group: str | None
+
+
+@app.put("/api/groups/assign")
+def groups_assign(body: GroupAssignIn, db: Session = Depends(get_db)):
+    return GS.assign(db, body.ids, body.group)

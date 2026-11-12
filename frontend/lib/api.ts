@@ -245,3 +245,9 @@ export type PHPool = { pool: string; stock: string; group_key: string; currency:
 export type PriceHistory = { key: boolean; running: boolean; waiting_until: string | null; message: string | null; last_run: string | null; queue: number | null;
   pools: PHPool[]; setup: string;
   counts: { pools: number; open: number; tiingo: number; csv: number; trades_only: number; open_trades_only: number; no_ticker_usd: number; warnings: number } };
+
+export type GroupSale = { id: string; date: string; stock: string; shares: number; sale_row: number | null; gain_usd: number | null;
+  proceeds_usd: number | null; cost_usd: number | null; group: string; how: "sheet" | "app" | null; source: string };
+export type GroupsResp = { groups: string[]; found_in_sheet: boolean; note: string; sales: GroupSale[];
+  sheet: { name: string; cell: string; rows: number; sheet_total: number | null; unresolved: string[]; subtracted: string[] }[];
+  in_two_groups: { row: number; groups: string[] }[]; log_rows_not_grouped: number[] };
