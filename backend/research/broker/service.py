@@ -333,7 +333,7 @@ def value_broker_portfolio(db: Session, base: str) -> dict:
                         + " (ECB rates are for information purposes only).")
     pl = tot_mv - tot_cb
     return {
-        "base_currency": effective, "requested_base_currency": base, "holdings_source": run.source, "status": "ok",
+        "base_currency": effective, "requested_base_currency": base, "holdings_source": "tracker" if run.source == "tracker" else "ibkr_flex", "status": "ok",
         "sync": {"report_date": run.report_date.isoformat() if run.report_date else None, "finished_at": run.finished_at.isoformat() if run.finished_at else None,
                  "accounts": run.accounts},
         "totals": {"market_value": _q(tot_mv), "cost_basis": _q(tot_cb), "unrealised_pl": _q(pl),
