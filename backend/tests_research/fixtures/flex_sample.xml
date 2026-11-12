@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- FAKE sample Activity Flex Query (no real account data). Used by tests and as a demo import file. -->
+<FlexQueryResponse queryName="FibonacciAI Positions" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U0001234" fromDate="20260102" toDate="20260102" period="LastBusinessDay" whenGenerated="20260105;083015">
+      <AccountInformation accountId="U0001234" currency="EUR" name="Sample Account" />
+      <ConversionRates>
+        <ConversionRate reportDate="20260102" fromCurrency="USD" toCurrency="EUR" rate="0.92" />
+        <ConversionRate reportDate="20260102" fromCurrency="CHF" toCurrency="EUR" rate="1.07" />
+      </ConversionRates>
+      <OpenPositions>
+        <OpenPosition accountId="U0001234" currency="USD" fxRateToBase="0.92" assetCategory="STK" symbol="AAPL" description="APPLE INC" conid="265598" securityID="US0378331005" securityIDType="ISIN" isin="US0378331005" listingExchange="NASDAQ" multiplier="1" reportDate="20260102" position="10" markPrice="200" positionValue="2000" openPrice="150" costBasisPrice="150" costBasisMoney="1500" fifoPnlUnrealized="500" side="Long" levelOfDetail="SUMMARY" />
+        <OpenPosition accountId="U0001234" currency="EUR" fxRateToBase="1" assetCategory="STK" symbol="ASML" description="ASML HOLDING NV" conid="117902840" isin="NL0010273215" listingExchange="AEB" multiplier="1" reportDate="20260102" position="2" markPrice="700" positionValue="1400" costBasisPrice="800" costBasisMoney="1600" fifoPnlUnrealized="-200" side="Long" levelOfDetail="SUMMARY" />
+        <OpenPosition accountId="U0001234" currency="CHF" fxRateToBase="1.07" assetCategory="STK" symbol="NESN" description="NESTLE SA-REG" conid="38709539" isin="CH0038863350" listingExchange="EBS" multiplier="1" reportDate="20260102" position="5" markPrice="80" positionValue="400" costBasisPrice="90" costBasisMoney="450" fifoPnlUnrealized="-50" side="Long" levelOfDetail="SUMMARY" />
+        <OpenPosition accountId="U0001234" currency="EUR" fxRateToBase="1" assetCategory="STK" symbol="VWRL" description="VANGUARD FTSE AW USDD" conid="128831206" isin="IE00B3RBWM25" listingExchange="AEB" multiplier="1" reportDate="20260102" position="10" markPrice="120" positionValue="1200" costBasisPrice="100" costBasisMoney="1000" fifoPnlUnrealized="200" side="Long" levelOfDetail="SUMMARY" />
+        <OpenPosition accountId="U0001234" currency="EUR" fxRateToBase="1" assetCategory="STK" symbol="VWRL" description="VANGUARD FTSE AW USDD" conid="128831206" isin="IE00B3RBWM25" listingExchange="AEB" multiplier="1" reportDate="20260102" position="4" markPrice="120" positionValue="480" costBasisPrice="95" costBasisMoney="380" fifoPnlUnrealized="100" side="Long" levelOfDetail="LOT" />
+        <OpenPosition accountId="U0001234" currency="USD" fxRateToBase="0.92" assetCategory="OPT" symbol="AAPL  260320C00250000" description="AAPL 20MAR26 250 C" conid="999" listingExchange="CBOE" multiplier="100" reportDate="20260102" position="1" markPrice="3.5" positionValue="350" costBasisPrice="2" costBasisMoney="200" fifoPnlUnrealized="150" side="Long" levelOfDetail="SUMMARY" />
+      </OpenPositions>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

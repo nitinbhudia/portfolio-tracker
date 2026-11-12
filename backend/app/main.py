@@ -33,6 +33,11 @@ async def lifespan(_app):
 
 
 app = FastAPI(title="Portfolio Tracker", version="0.1.0", lifespan=lifespan)
+
+# Research (the former Fibonacci AI app): its own API and database, served under /research/api/…
+from research.main import app as research_app  # noqa: E402
+
+app.mount("/research", research_app)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3001", "http://127.0.0.1:3001"],
                    allow_methods=["*"], allow_headers=["*"])
 

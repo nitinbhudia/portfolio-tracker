@@ -81,6 +81,25 @@ If a port is busy, the script says which program is using it. Stop the app with 
 
 Gains are before fees and dividends, which the sheet doesn't record. This reports what happened; it isn't advice.
 
+## Research (the former Fibonacci AI app)
+
+The **Research** tab is the Fibonacci AI app, now part of Portfolio Tracker: one start button, one `.env`, one Terminal
+window. Its sub-menu has **Overview, Sector Rotation, Scanner, Watchlist, Market Analysis** (charts with SMAs, Fibonacci
+levels, RSI, MACD and short/medium/long-term scores), **Alerts, Backtesting** and **Settings**. What each does is described
+in `docs/research/` (the former Fibonacci AI docs).
+
+- **Your holdings come from Portfolio Tracker.** Research follows your open positions (from your workbook) for its Overview,
+  the scanner's "My holdings" preset and alerts. US stocks with a ticker (Data ▾ Price history) get real Tiingo prices and a
+  full analysis; others are valued with the tracker's own price. On **Positions**, a ticker link next to a stock opens its
+  Research analysis. Fibonacci AI's own My Portfolio page and IBKR sync were dropped (Research → Settings can still switch
+  to the synthetic demo portfolio).
+- **Keys:** the same `TIINGO_API_KEY` serves both. For European prices in Research add `EODHD_API_KEY` (optional, paid).
+- **Data:** Research keeps its own database, `backend/fibonacci_ai.db` (prices, watchlist, alerts, backtests, settings).
+  To keep what you had in Fibonacci AI, copy `fibonacci-ai/backend/fibonacci_ai.db` into this app's `backend` folder
+  before starting it; the starter brings it up to date. Without it, Research starts with its synthetic demo data and
+  downloads real prices for your holdings when you press **Update prices** / **Refresh data**.
+- Research is a research tool, not investment advice: setups and scores are conditions to look into, not buy or sell signals.
+
 ## Tests
 
 ```bash

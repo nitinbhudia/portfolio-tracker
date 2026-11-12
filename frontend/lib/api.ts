@@ -97,7 +97,7 @@ export type Lot = { buy_id: string; row: number; date: string; broker: string; s
 export type Position = {
   stock: string; stock_key: string; currency: string; lots: Lot[]; shares: number; cost_local: number; cost_usd: number | null;
   avg_cost: number | null; price: number | null; price_from_row: number | null; price_date: string | null; price_source: string | null;
-  pool: string; pence: boolean; value_local: number | null; value_usd: number | null;
+  pool: string; pence: boolean; value_local: number | null; value_usd: number | null; ticker?: string | null;
   rate: number | null; rate_date: string | null; unrealised_usd: number | null; unrealised_pct: number | null; days_held: number | null;
   weight_pct: number | null;
 };

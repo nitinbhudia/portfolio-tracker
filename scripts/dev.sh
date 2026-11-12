@@ -32,6 +32,8 @@ source .venv/bin/activate
 pip install -q --upgrade pip
 pip install -q -r backend/requirements-dev.txt
 (cd frontend && { [ -d node_modules ] || npm ci; })
+# Research (the former Fibonacci AI app): bring its database up to date and add the demo data on first run.
+(cd backend && alembic -c research/alembic.ini upgrade head >/dev/null && python -m research.data.seed)
 
 if [ "$TEST" = 1 ]; then
   (cd backend && python -m pytest -q)
