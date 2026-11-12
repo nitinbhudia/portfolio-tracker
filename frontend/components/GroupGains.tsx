@@ -15,7 +15,13 @@ export function GroupGains({ asOf, range }: { asOf: string; range: Range }) {
   const [open, setOpen] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const d = q.data;
-  if (!d) return null;
+  if (q.error) return (
+    <Section title="Realised gain by group">
+      <p className="text-sm text-slate-600 dark:text-slate-300">Couldn&apos;t load your groups: {q.error.message}
+        {q.error.status === 404 && " The app's backend may be an older version: close the app's Terminal window and start it again."}</p>
+    </Section>
+  );
+  if (!d) return <Section title="Realised gain by group"><p className="text-sm text-slate-500">Loading…</p></Section>;
   const win = resolve(range, asOf);
   const sales = d.sales.filter((s) => s.gain_usd !== null && inRange(s.date, win));
   const years = [...new Set(sales.map((s) => s.date.slice(0, 4)))].sort();
