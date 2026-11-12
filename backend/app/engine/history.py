@@ -159,7 +159,7 @@ def build(trades: list[Trade], sales: list[Sale], rates: Rates, lines: dict[str,
     return {"dates": [d.isoformat() for d in days], **out, "problems": sorted(problems)}
 
 
-def odd_prices(trades: list[Trade], factor: float = 4.0, days: int = 30) -> list[str]:
+def odd_trades(trades: list[Trade], factor: float = 4.0, days: int = 30) -> list[dict]:
     """Trades whose price is `factor`× away from the same stock's other trades within `days`: a move that size in a month
     usually means two different stocks written with the same name (or a missing split), which distorts the daily value."""
     by_pool: dict[str, list[Trade]] = defaultdict(list)
@@ -168,16 +168,22 @@ def odd_prices(trades: list[Trade], factor: float = 4.0, days: int = 30) -> list
     out = []
     for ts in by_pool.values():
         ts.sort(key=lambda t: (t.date, t.row))
-        for i, t in enumerate(ts):
+        for t in ts:
             near = [x.price for x in ts if x is not t and x.price > 0 and abs((x.date - t.date).days) <= days]
             if len(near) < 2 or t.price <= 0:
                 continue
             near.sort()
             med = near[len(near) // 2]
             if t.price > med * factor or t.price < med / factor:
-                out.append(f"{t.stock}: the {t.kind} on {t.date.isoformat()} (sheet row {t.row}) at {t.price:g} is far from its other trades "
-                           f"(around {med:g}). Is it a different stock with a similar name? Correct the name on Data ▾ Trades.")
+                out.append({"id": t.id, "kind": t.kind, "stock": t.stock, "pool": t.pool, "date": t.date.isoformat(), "row": t.row,
+                            "shares": t.shares, "price": t.price, "typical": med, "currency": t.currency})
     return out
+
+
+def odd_prices(trades: list[Trade], factor: float = 4.0, days: int = 30) -> list[str]:
+    return [f"{x['stock']}: the {x['kind']} on {x['date']} (sheet row {x['row']}) at {x['price']:g} is far from its other trades "
+            f"(around {x['typical']:g}). Is it a different stock with a similar name? Correct the name on Data ▾ Trades."
+            for x in odd_trades(trades, factor, days)]
 
 
 def months(series: dict) -> list[dict]:

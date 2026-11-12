@@ -388,6 +388,34 @@ def status(db: Session) -> dict:
             "setup": "Get a free key at tiingo.com, add TIINGO_API_KEY=… to the .env file in the app's folder, restart the app."}
 
 
+ODD_IGNORED = "odd_trades_ignored"
+
+
+def ignore_odd(db: Session, items: list[dict]) -> dict:
+    """Mark flagged trades as correct (e.g. a real 5× move); keyed by trade and price, so a changed row is checked again."""
+    row = db.get(m.Setting, ODD_IGNORED)
+    ids = set((row.value or {}).get("ids", [])) if row else set()
+    ids |= {f"{x['id']}@{float(x['price']):g}" for x in items}
+    if row is None:
+        db.add(m.Setting(key=ODD_IGNORED, value={"ids": sorted(ids)}))
+    else:
+        row.value = {"ids": sorted(ids)}
+    db.commit()
+    _invalidate()
+    return {"ignored": len(ids)}
+
+
+def rename_trades(db: Session, ids: list[str], name: str) -> dict:
+    """Give several sheet trades another stock name at once (sales first, so a sale never waits on its renamed purchase)."""
+    from . import entries as E
+    if not ids:
+        raise BadRequest("Choose at least one trade.")
+    for tid in sorted(ids, key=lambda i: (0 if i.startswith("S") else 1, i)):
+        E.correct(db, tid, {"name": name})
+    _invalidate()
+    return {"renamed": len(ids), "name": name.strip()}
+
+
 _CACHE: dict = {}
 
 
@@ -420,8 +448,9 @@ def performance(db: Session) -> dict:
         lines[x["pool"]] = H.price_line([(d, c) for d, c, _ in hist], pts)
     end = _valuation_end(db, st)
     series = H.build(st["rb"].trades, st["sales"], st["rates"], lines, end)
-    series["problems"] = series["problems"] + H.odd_prices(st["rb"].trades)
-    out = {"as_of": end.isoformat(), **series, "months": H.months(series),
+    ignored = set((db.get(m.Setting, ODD_IGNORED).value or {}).get("ids", [])) if db.get(m.Setting, ODD_IGNORED) else set()
+    odd = [x for x in H.odd_trades(st["rb"].trades) if f"{x['id']}@{x['price']:g}" not in ignored]
+    out = {"as_of": end.isoformat(), **series, "months": H.months(series), "odd_trades": odd,
            "estimated_now_pct": (series["estimated"][-1] / series["value"][-1] * 100) if series["value"] and series["value"][-1] else None,
            "note": ("Open positions are valued each day at that day's close where a price history exists (Tiingo or your CSV); "
                     "otherwise at the last known trade or entered price, carried forward (marked as estimated). Closed = "

@@ -499,3 +499,22 @@ class TickerIn(BaseModel):
 @app.put("/api/price-history/ticker/{group_key}")
 def price_history_ticker(group_key: str, body: TickerIn, db: Session = Depends(get_db)):
     return HS.set_ticker(db, group_key, body.ticker)
+
+
+class RenameTradesIn(BaseModel):
+    ids: list[str]
+    name: str
+
+
+@app.post("/api/trades/rename")
+def rename_trades(body: RenameTradesIn, db: Session = Depends(get_db)):
+    return HS.rename_trades(db, body.ids, body.name)
+
+
+class OddIgnoreIn(BaseModel):
+    items: list[dict]
+
+
+@app.post("/api/performance/odd-trades/ignore")
+def ignore_odd_trades(body: OddIgnoreIn, db: Session = Depends(get_db)):
+    return HS.ignore_odd(db, body.items)
