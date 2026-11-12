@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { Columns, Lines, RankedBars } from "@/components/charts";
+import { GroupGains } from "@/components/GroupGains";
 import { RangePicker, useRange } from "@/components/RangePicker";
 import { ErrorBox, Loading, Note, Pct, Section, Stat, Usd, btnPrimary } from "@/components/ui";
 import { type Analysis, type CheckResp, type Status, useApi } from "@/lib/api";
@@ -73,6 +74,7 @@ export default function Overview() {
                   { name: "Cumulative realised gain", color: "var(--viz-2)", values: tl.map((p) => p.realised_cum_usd) }]} />)}
               <p className="mt-1 text-xs text-slate-500">Month-ends. Market value isn&apos;t shown over time: the sheet only has today&apos;s prices.</p>
             </Section>
+            <div className="min-w-0 lg:col-span-2"><GroupGains asOf={a.as_of} range={range} /></div>
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
             <Section title="Open positions by broker account"><RankedBars rows={a.allocation.by_broker.map((r) => ({ label: r.label, value: r.value_usd, pct: r.pct }))} fmt={(v) => usd(v)} /></Section>

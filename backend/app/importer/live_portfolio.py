@@ -108,6 +108,7 @@ class Workbook:
     position_rows: tuple[int, int]
     sales_rows: tuple[int, int] | None
     cash: list[dict] = field(default_factory=list)  # the cash block(s) as recorded: header "Orginal | Dollar"
+    groups: list[dict] = field(default_factory=list)  # your sale groups (e.g. "Alpha picks", "Trading"): see _groups
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -262,8 +263,75 @@ def read(data: bytes) -> Workbook:
                     block["rows"].append({"row": rr, "label": None if label in (None, "", " ") else str(label).strip(),
                                           "original": _num(o), "usd": _num(u)})
                 cash.append(block)
+    groups = _groups(v, f, len(vals), width, sales_range, {s.row for s in sales})
     return Workbook(sha256=hashlib.sha256(data).hexdigest(), sheet_name=tab, saved_at=saved_at, positions=positions,
-                    sales=sales, skipped=skipped, position_rows=(2, last), sales_rows=sales_range, cash=cash)
+                    sales=sales, skipped=skipped, position_rows=(2, last), sales_rows=sales_range, cash=cash, groups=groups)
+
+
+REF = re.compile(r"(-?)\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?")
+
+
+def _col_index(letters: str) -> int:
+    n = 0
+    for ch in letters:
+        n = n * 26 + ord(ch) - 64
+    return n - 1
+
+
+def _col_letter(i: int) -> str:
+    s, i = "", i + 1
+    while i:
+        i, r = divmod(i - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+def _groups(v, f, nrows: int, width: int, sales_range, sale_rows: set[int]) -> list[dict]:
+    """Your own grouping of sales, below the sales log: a row of group names (e.g. "Alpha picks | Trading | Mag 7 …")
+    with, in the row under each name, a formula adding up that group's sales-log rows (=G1539+G1533+…, SUM(…) ranges,
+    or a reference to another cell in the block that does, like =E1996). Each group = the sales-log rows it adds up."""
+    if not sales_range:
+        return []
+    lo, hi = sales_range
+
+    def resolve(c: int, r: int, seen: set) -> tuple[set[int], list[str], list[str]]:
+        rows, unresolved, minus = set(), [], []
+        fx = f(r, c)
+        if not fx or (c, r) in seen:
+            return rows, unresolved, minus
+        seen.add((c, r))
+        for neg, c1, r1, c2, r2 in REF.findall(fx):
+            a, b = int(r1), int(r2 or r1)
+            for rr in range(min(a, b), max(a, b) + 1):
+                cell = f"{c1}{rr}"
+                if rr in sale_rows:
+                    if neg:
+                        minus.append(cell)
+                    else:
+                        rows.add(rr)
+                elif rr > hi and rr <= nrows:  # another cell of the summary block: follow its formula
+                    sub, un, mi = resolve(_col_index(c1), rr, seen)
+                    rows |= sub
+                    unresolved += un
+                    minus += mi
+                else:
+                    unresolved.append(cell)
+        return rows, unresolved, minus
+
+    for r in range(hi + 1, min(hi + 60, nrows)):
+        cols = []
+        for c in range(width):
+            name = v(r, c)
+            if not isinstance(name, str) or not name.strip() or _num(name) is not None:
+                continue
+            members, unresolved, minus = resolve(c, r + 1, set())
+            if len(members) >= 1:
+                cols.append({"name": re.sub(r"\s+", " ", name).strip(), "column": _col_letter(c), "header_row": r,
+                             "rows": sorted(members), "unresolved": sorted(set(unresolved)), "subtracted": minus,
+                             "sheet_total": _num(v(r + 1, c))})
+        if len(cols) >= 2:
+            return cols
+    return []
 
 
 def _d(x):
@@ -275,4 +343,5 @@ def from_dict(d: dict) -> Workbook:
     sales = [SaleRow(**{**s, "date": _d(s["date"])}) for s in d["sales"]]
     return Workbook(sha256=d["sha256"], sheet_name=d["sheet_name"], saved_at=d["saved_at"], positions=pos, sales=sales,
                     skipped=[Skipped(**s) for s in d["skipped"]], position_rows=tuple(d["position_rows"]),
-                    sales_rows=tuple(d["sales_rows"]) if d["sales_rows"] else None, cash=d.get("cash", []))
+                    sales_rows=tuple(d["sales_rows"]) if d["sales_rows"] else None, cash=d.get("cash", []),
+                    groups=d.get("groups", []))
