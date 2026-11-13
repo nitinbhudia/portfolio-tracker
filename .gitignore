@@ -9,6 +9,10 @@
 .env
 uploads/
 data/
+# ...except Research's code and demo data, and the test fixtures (all made up)
+!backend/research/data/
+!backend/research/data/**
+!backend/tests_research/fixtures/**
 # tooling
 .venv/
 __pycache__/
