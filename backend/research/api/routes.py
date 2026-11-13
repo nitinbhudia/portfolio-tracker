@@ -317,6 +317,56 @@ def market_data_remove(ticker: str, db: Session = Depends(get_db)):
     return md.status(db)
 
 
+class TrackIn(BaseModel):
+    ticker: str
+    exchange: str = "US"  # US (Tiingo) or a European MIC priced by EODHD: XETR, XAMS, XPAR, XSWX, XLON
+    watch: bool = False
+    note: str | None = None
+
+
+TRACK_EXCHANGES = {"US": "US (Tiingo)", "XETR": "Xetra", "XAMS": "Euronext Amsterdam", "XPAR": "Euronext Paris",
+                   "XSWX": "SIX Swiss Exchange", "XLON": "London Stock Exchange"}
+
+
+@router.get("/track/options")
+def track_options(db: Session = Depends(get_db)):
+    from research.market_data import eu_service
+    return {"exchanges": TRACK_EXCHANGES, "us_configured": md.configured(), "eu_configured": eu_service.configured()}
+
+
+@router.post("/track")
+def track(body: TrackIn, db: Session = Depends(get_db)):
+    """From Portfolio Tracker: add a stock to Research, download its price history, calculate and store its analysis
+    (indicators, swings, Fibonacci levels, scores) and optionally put it on the watchlist. It then stays tracked:
+    later price refreshes include it."""
+    from research.market_data import eu_service
+    from research.services import scanner
+    ex = body.exchange.strip().upper()
+    if ex not in TRACK_EXCHANGES:
+        raise an.BadRequest(f"exchange must be one of {', '.join(TRACK_EXCHANGES)}")
+    if ex == "US":
+        if not md.configured():
+            raise MarketDataError("not_configured", "US prices need a Tiingo key: add TIINGO_API_KEY=… to the app's .env file and restart.")
+        r = md.add_symbol(db, body.ticker)
+    else:
+        if not eu_service.configured():
+            raise MarketDataError("not_configured", "European prices need an EODHD key: add EODHD_API_KEY=… to the app's .env file and restart.")
+        lst = eu_service.find_listing(db, body.ticker.strip().upper(), ex)
+        r = eu_service.add_symbol(db, body.ticker, ex) if lst is None else {"listing_id": lst.id, **eu_service.refresh_one(db, lst)}
+    lid = r["listing_id"]
+    if body.watch:
+        scanner.add_to_watchlist(db, lid, body.note)
+    a = an.analyse_listing(db, lid, include_series=False)
+    fib = a.get("fibonacci") or {}
+    summary = None
+    if a.get("status") == "ok":
+        summary = {"as_of": a["as_of"], "close": a["latest"]["close"], "nearest_fibonacci": fib.get("nearest") if fib.get("status") == "ok" else None,
+                   "scores": {h: sc.get("total") for h, sc in (a.get("scores") or {}).items()}}
+    watched = db.scalar(select(m.WatchlistItem.id).where(m.WatchlistItem.listing_id == lid)) is not None
+    return {"listing_id": lid, "ticker": body.ticker.strip().upper(), "exchange": ex, "download": {k: r.get(k) for k in ("status", "bars_added", "last_date")},
+            "analysis_status": a.get("status"), "summary": summary, "watched": watched}
+
+
 @router.get("/screener")
 def get_screener(namespace: str = "all", sensitivity: str | None = None, db: Session = Depends(get_db)):
     from research.services.screener import screener

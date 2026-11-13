@@ -3,19 +3,23 @@
 import Link from "next/link";
 
 import { type Column, DataTable } from "@/components/DataTable";
+import { ResearchActions, remembered } from "@/components/ResearchActions";
 import { ErrorBox, Loading, Note, Pct, Section, Stat, Usd } from "@/components/ui";
 import { type Position, type PositionsResp, useApi } from "@/lib/api";
 import { num, pct, qty, usd } from "@/lib/format";
 
 export default function PositionsPage() {
   const q = useApi<PositionsResp>("/api/positions");
+  const wl = useApi<{ rows: { listing: { ticker: string } }[] }>("/research/api/watchlist");
+  const watched = new Set((wl.data?.rows ?? []).map((r) => r.listing.ticker.toUpperCase()));
   if (q.error) return <ErrorBox error={q.error} onRetry={q.reload} />;
   if (!q.data) return <Loading />;
   const d = q.data;
   const cols: Column<Position>[] = [
     { key: "stock", label: "Stock", type: "text", get: (p) => p.stock,
       render: (p) => <>{p.stock}{p.ticker && <Link className="ml-1.5 text-xs text-blue-700 underline dark:text-blue-300" title={`Open ${p.ticker} in Research (chart, Fibonacci, scores)`}
-        href={`/research/analysis/ticker/${encodeURIComponent(p.ticker)}`}>{p.ticker} ↗</Link>}</> },
+        href={`/research/analysis/ticker/${encodeURIComponent(p.ticker)}`}>{p.ticker} ↗</Link>}
+        <ResearchActions p={p} watched={watched.has(remembered(p).ticker.toUpperCase())} onChange={() => { q.reload(); wl.reload(); }} /></> },
     { key: "ccy", label: "Ccy", type: "enum", get: (p) => p.currency },
     { key: "shares", label: "Shares", type: "number", align: "right", get: (p) => p.shares, render: (p) => qty(p.shares) },
     { key: "avg", label: "Avg FIFO cost", type: "number", align: "right", get: (p) => p.avg_cost, render: (p) => num(p.avg_cost) },
