@@ -73,6 +73,9 @@ function makeColumns(catalog: SetupCatalogItem[], reload: () => void, select: (i
   ];
 }
 
+type AddHoldingsResp = { added: string[]; already: string[]; configured: boolean; note: string | null;
+  download: null | { updated: number; up_to_date: number; waiting: number; failed: string[] } };
+
 export default function WatchlistPage() {
   const { data, error, loading, reload } = useApi<WatchlistResp>("/api/watchlist");
   // The catalog (setup names) comes with the scanner response, which is cheap to read.
@@ -81,9 +84,38 @@ export default function WatchlistPage() {
   const [selected, setSelected] = useState<number | null>(null);
   const columns = useMemo(() => makeColumns(catalog, reload, setSelected), [catalog, reload]);
   const sel = data?.rows.find((r) => r.listing.id === selected);
+  const [adding, setAdding] = useState(false);
+  const [addMsg, setAddMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const addHoldings = async () => {
+    setAdding(true);
+    setAddMsg(null);
+    try {
+      const r = await apiFetch<AddHoldingsResp>("/api/watchlist/add-holdings", { method: "POST" });
+      const d = r.download;
+      const parts = [`Added ${r.added.length} US holding${r.added.length === 1 ? "" : "s"} to the watchlist` + (r.already.length ? ` (${r.already.length} already on it)` : "") + "."];
+      if (!r.configured) parts.push("Prices need a Tiingo key (TIINGO_API_KEY in .env).");
+      else if (d) {
+        parts.push(`Prices: ${d.updated} downloaded, ${d.up_to_date} up to date` + (d.failed.length ? `, failed: ${d.failed.join(", ")}` : "") + ".");
+        if (d.waiting) parts.push(`${d.waiting} wait for Tiingo's hourly limit: press Refresh data on Market Analysis in an hour or so for the rest.`);
+      }
+      if (r.note) parts.push(r.note);
+      setAddMsg({ ok: true, text: parts.join(" ") });
+      reload();
+    } catch (e) {
+      setAddMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setAdding(false);
+    }
+  };
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Watchlist</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">Watchlist</h1>
+        <button onClick={addHoldings} disabled={adding} title="Every US stock you hold in Portfolio Tracker (with a ticker)"
+          className="rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900">
+          {adding ? "Adding and downloading prices…" : "☆ Add all my US holdings"}</button>
+      </div>
+      {addMsg && <p className={`text-sm ${addMsg.ok ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>{addMsg.text}</p>}
       <Section title="Watched instruments" right={data ? <ProvenanceBadge p={data.provenance} compact /> : null}>
         {loading && !data ? (
           <Loading label="Calculating your watchlist…" />

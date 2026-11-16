@@ -19,6 +19,7 @@ import httpx
 
 PROVIDER = "tiingo"
 BASE = "https://api.tiingo.com/tiingo/daily"
+SEARCH = "https://api.tiingo.com/tiingo/utilities/search"
 USER_AGENT = "FibonacciAI/0.3 (personal research tool)"
 
 
@@ -77,7 +78,7 @@ class TiingoClient:
 
     def _get(self, path: str, params: dict | None = None):
         try:
-            r = self._client.get(f"{BASE}/{path}", params=params or {},
+            r = self._client.get(path if path.startswith("https://") else f"{BASE}/{path}", params=params or {},
                                  headers={"Authorization": f"Token {self._token}",
                                           "Content-Type": "application/json", "User-Agent": USER_AGENT})
         except httpx.TimeoutException:
@@ -108,6 +109,14 @@ class TiingoClient:
         return SymbolMeta(ticker=d.get("ticker", ticker), name=d.get("name"),
                           exchange_code=d.get("exchangeCode"), start_date=_d(d.get("startDate")),
                           end_date=_d(d.get("endDate")))
+
+    def search(self, query: str, limit: int = 15) -> list[dict]:
+        """Tickers whose name or symbol matches `query` (Tiingo's search; one request)."""
+        rows = self._get(SEARCH, {"query": query, "limit": limit})
+        if not isinstance(rows, list):
+            raise MarketDataError("parse_error", "Unexpected search response from Tiingo.")
+        return [{"ticker": r.get("ticker", "").upper(), "name": r.get("name"), "asset_type": r.get("assetType"),
+                 "country": r.get("countryCode"), "active": r.get("isActive", True)} for r in rows if r.get("ticker")]
 
     def daily(self, ticker: str, start: date) -> list[DailyBar]:
         rows = self._get(f"{to_tiingo_symbol(ticker)}/prices", {"startDate": start.isoformat()})

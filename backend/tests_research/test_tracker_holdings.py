@@ -84,3 +84,61 @@ def test_track_from_portfolio_tracker(fresh_db, monkeypatch):  # noqa: F811
         assert r.status_code == 400 and "TIINGO_API_KEY" in r.json()["message"]
     finally:
         app.dependency_overrides.clear()
+
+
+def _app_with(fresh_db, monkeypatch, fake):  # noqa: F811
+    from fastapi.testclient import TestClient
+
+    from research.db.session import get_db
+    from research.main import app
+    from research.market_data import service as md
+
+    from .test_market_data import nyse_days
+    session = nyse_days(date(2026, 11, 6), 1)[-1]
+    monkeypatch.setattr(md, "last_completed_session", lambda now=None: session)
+    monkeypatch.setattr(md, "default_client", lambda: fake.client)
+    monkeypatch.setattr(md, "configured", lambda: True)
+
+    def _db():
+        db = fresh_db()
+        try:
+            yield db
+        finally:
+            db.close()
+    app.dependency_overrides[get_db] = _db
+    return TestClient(app), app
+
+
+def test_add_all_us_holdings_to_watchlist_and_search(fresh_db, monkeypatch):  # noqa: F811
+    import httpx
+
+    from research.market_data.tiingo import TiingoClient
+
+    from .test_market_data import KEY, FakeTiingo, nyse_days
+    fake = FakeTiingo(nyse_days(date(2026, 11, 6), 1)[-1])
+    inner = fake.handle
+
+    def handle(req):  # the fake also answers Tiingo's name search
+        if req.url.path.endswith("/utilities/search"):
+            return httpx.Response(200, json=[{"ticker": "pltr", "name": "Palantir Technologies Inc", "assetType": "Stock",
+                                              "countryCode": "US", "isActive": True},
+                                             {"ticker": "old", "name": "Delisted Co", "assetType": "Stock", "countryCode": "US",
+                                              "isActive": False}])
+        return inner(req)
+    fake.client = TiingoClient(KEY, httpx.Client(transport=httpx.MockTransport(handle)))
+    monkeypatch.setattr(tr, "read_tracker", lambda: (POS, {"apple": "AAPL"}))
+    c, app = _app_with(fresh_db, monkeypatch, fake)
+    try:
+        c.put("/api/settings", json={"holdings_source": "tracker"})
+        r = c.post("/api/watchlist/add-holdings").json()
+        assert r["added"] == ["AAPL"] and r["download"]["updated"] == 1 and r["download"]["waiting"] == 0
+        assert [w["listing"]["ticker"] for w in r["rows"]] == ["AAPL"]
+        assert c.post("/api/watchlist/add-holdings").json()["already"] == ["AAPL"]  # nothing added twice
+        s = c.get("/api/search?q=app").json()
+        assert s["local"][0] == {"ticker": "AAPL", "name": "Apple", "exchange": "US", "source": "your holdings"} and s["remote"] is None
+        s = c.get("/api/search?q=palantir&remote=true").json()
+        assert s["remote"] == [{"ticker": "PLTR", "name": "Palantir Technologies Inc", "asset_type": "Stock", "country": "US",
+                                "active": True, "exchange": "US", "source": "Tiingo"}]  # inactive listings dropped
+        assert c.get("/api/search?q=p&remote=true").status_code == 400
+    finally:
+        app.dependency_overrides.clear()

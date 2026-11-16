@@ -94,7 +94,12 @@ in `docs/research/` (the former Fibonacci AI docs).
   downloads its price history, calculates and saves its Fibonacci levels, moving averages, RSI, MACD and scores, and
   opens it in Research or puts it on Research's watchlist (★ marks watched stocks). US stocks use Tiingo; European ones
   need EODHD and an exchange (Xetra, Euronext Amsterdam/Paris, SIX, London). The stock stays tracked from then on.
-  The ticker link next to a stock opens its Research analysis directly. Fibonacci AI's own My Portfolio page and IBKR sync were dropped (Research → Settings can still switch
+  The ticker link next to a stock opens its Research analysis directly.
+- **Research → Watchlist → Add all my US holdings** puts every US stock you hold (with a ticker) on the watchlist and
+  downloads as many price histories as Tiingo's free hourly limit allows; press **Refresh data** later for the rest.
+- **Research → Scanner → Add a stock**: type a ticker, or a company name and press **Search by name** (one Tiingo request),
+  then **Add** or **Add & watch**. The stock's history is downloaded, analysed and saved, and the scan is run again so it
+  appears in the results. European stocks: choose the exchange (needs EODHD). Fibonacci AI's own My Portfolio page and IBKR sync were dropped (Research → Settings can still switch
   to the synthetic demo portfolio).
 - **Keys:** the same `TIINGO_API_KEY` serves both. For European prices in Research add `EODHD_API_KEY` (optional, paid).
 - **Data:** Research keeps its own database, `backend/fibonacci_ai.db` (prices, watchlist, alerts, backtests, settings).

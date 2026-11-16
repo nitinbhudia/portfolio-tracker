@@ -313,6 +313,19 @@ def add_symbol(db: Session, ticker: str, client: TiingoClient | None = None) -> 
     return {"ticker": existing.ticker, "listing_id": existing.id, **r}
 
 
+def search(db: Session, query: str, client: TiingoClient | None = None) -> list[dict]:
+    """Find US stocks and ETFs by name or ticker (uses one Tiingo request)."""
+    q = query.strip()
+    if len(q) < 2:
+        raise MarketDataError("bad_symbol", "Type at least 2 letters.")
+    if not _budget_ok(db):
+        raise MarketDataError("budget", f"Tiingo's free-plan limit for this hour is used up ({HOURLY_BUDGET} requests), e.g. by a price "
+                                        "download. Try again in up to an hour; adding a stock by its ticker needs requests too.")
+    client = client or default_client()
+    rows = _call(db, "search", lambda: client.search(q))
+    return [r for r in rows if r["active"] and (r["country"] in (None, "", "US") or r["asset_type"] == "ETF")]
+
+
 def remove_symbol(db: Session, ticker: str) -> None:
     _save_user_symbols(db, [s for s in _user_symbols(db) if s != ticker.strip().upper()])
     db.commit()
