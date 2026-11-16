@@ -367,6 +367,66 @@ def track(body: TrackIn, db: Session = Depends(get_db)):
             "analysis_status": a.get("status"), "summary": summary, "watched": watched}
 
 
+@router.get("/search")
+def search(q: str, remote: bool = False, db: Session = Depends(get_db)):
+    """Find a stock to add: your Portfolio Tracker holdings and stocks already in Research (free), and with remote=true
+    Tiingo's search by name (one request of the free-plan budget)."""
+    from research.broker import tracker as tr
+    from research.broker.base import BrokerError
+    text = q.strip().lower()
+    local, seen = [], set()
+    if len(text) >= 1:
+        try:
+            pos, tickers = tr.read_tracker()
+            for p in pos["positions"]:
+                tk = tickers.get(p["stock_key"]) if p["currency"] == "USD" else None
+                if tk and (text in p["stock"].lower() or text in tk.lower()) and tk not in seen:
+                    seen.add(tk)
+                    local.append({"ticker": tk, "name": p["stock"], "exchange": "US", "source": "your holdings"})
+        except BrokerError:
+            pass
+        for lst in db.scalars(select(m.Listing).where(m.Listing.namespace == "real")).all():
+            name = (lst.instrument.name or "") if lst.instrument else ""
+            if lst.ticker not in seen and (text in lst.ticker.lower() or text in name.lower()):
+                seen.add(lst.ticker)
+                local.append({"ticker": lst.ticker, "name": name, "exchange": "US" if lst.exchange_mic in md.US_MICS else lst.exchange_mic,
+                              "source": "in Research"})
+    remote_rows = None
+    if remote:
+        remote_rows = [{**r, "exchange": "US", "source": "Tiingo"} for r in md.search(db, q) if r["ticker"] not in seen]
+    return {"local": local[:20], "remote": remote_rows}
+
+
+@router.post("/watchlist/add-holdings")
+def watch_holdings(db: Session = Depends(get_db)):
+    """Put every US holding from Portfolio Tracker (with a ticker) on the watchlist, then download prices for as many as
+    Tiingo's free-plan allowance allows right now; the rest follow with the next Refresh data."""
+    from research.services import scanner
+    if get_settings(db)["holdings_source"] == "tracker":
+        sync_tracker(db)
+    targets = md.broker_us_targets(db)
+    added, already = [], []
+    for t in targets:
+        lst = md.ensure_listing(db, t["ticker"], t["mic"], t["name"], t["isin"])
+        db.commit()
+        if db.scalar(select(m.WatchlistItem.id).where(m.WatchlistItem.listing_id == lst.id)) is None:
+            scanner.add_to_watchlist(db, lst.id, None)
+            added.append(t["ticker"])
+        else:
+            already.append(t["ticker"])
+    download = None
+    if md.configured() and targets:
+        r = md.refresh_all(db, only=[t["ticker"] for t in targets])["results"]
+        mine = [x for x in r if x["origin"] in ("ibkr", "user")]
+        download = {"updated": sum(x["status"] == "updated" for x in mine), "up_to_date": sum(x["status"] == "up_to_date" for x in mine),
+                    "waiting": sum(x["status"] == "skipped_budget" for x in mine), "failed": [x["ticker"] for x in mine if x["status"] == "failed"]}
+    run = broker.last_success(db)
+    no_ticker = len([w for w in (run.warnings or []) if "no ticker" in w]) if run else 0
+    return {"added": added, "already": already, "download": download, "configured": md.configured(),
+            "note": ("US holdings without a ticker can't be added: set tickers on Data ▾ Price history." if no_ticker else None),
+            **_watchlist(db)}
+
+
 @router.get("/screener")
 def get_screener(namespace: str = "all", sensitivity: str | None = None, db: Session = Depends(get_db)):
     from research.services.screener import screener

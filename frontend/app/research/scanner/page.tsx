@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { AddStock } from "@/components/research/AddStock";
 import { type Column, DataTable, type Preset } from "@/components/research/DataTable";
 import { SetupBreakdown, SetupChips } from "@/components/research/Setups";
 import { ClassBadge, Empty, ErrorBox, Loading, ProvenanceBadge, Section, Warn } from "@/components/research/ui";
@@ -154,6 +155,7 @@ export default function ScannerPage() {
         </div>
       </div>
       <ErrorBox error={runErr} />
+      <AddStock onAdded={run} />
       {loading && !data ? (
         <Loading label="Loading the latest scan…" />
       ) : error ? (
