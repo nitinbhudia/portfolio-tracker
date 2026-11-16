@@ -99,7 +99,11 @@ in `docs/research/` (the former Fibonacci AI docs).
   downloads as many price histories as Tiingo's free hourly limit allows; press **Refresh data** later for the rest.
 - **Research → Scanner → Add a stock**: type a ticker, or a company name and press **Search by name** (one Tiingo request),
   then **Add** or **Add & watch**. The stock's history is downloaded, analysed and saved, and the scan is run again so it
-  appears in the results. European stocks: choose the exchange (needs EODHD). Fibonacci AI's own My Portfolio page and IBKR sync were dropped (Research → Settings can still switch
+  appears in the results. European stocks: choose the exchange (needs EODHD).
+- **Sector pages** (click a sector in Sector Rotation) start with **Top 10 stocks in the sector**: the ETF's ten biggest
+  holdings by weight, downloaded automatically from the issuer's daily file (State Street for US sectors, iShares for
+  Europe), marked "you hold" where you own them. **φ Analyse** / **☆ Watch** per stock, or **φ Analyse all**, downloads their
+  prices and shows each one's Fibonacci analysis, 20-day change and strength against the sector. Fibonacci AI's own My Portfolio page and IBKR sync were dropped (Research → Settings can still switch
   to the synthetic demo portfolio).
 - **Keys:** the same `TIINGO_API_KEY` serves both. For European prices in Research add `EODHD_API_KEY` (optional, paid).
 - **Data:** Research keeps its own database, `backend/fibonacci_ai.db` (prices, watchlist, alerts, backtests, settings).

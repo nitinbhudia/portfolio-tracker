@@ -157,6 +157,7 @@ def test_holdings_refresh_and_status(client):
     assert h["as_of"] == "2026-11-04" and [x["ticker"] for x in h["top10"][:3]] == ["AAPL", "NVDA", "MSFT"]
     assert h["top10_weight_pct"] == pytest.approx(sum(x["weight_pct"] for x in h["top10"]))
     assert h["missing_prices"] == []  # synthetic mode doesn't ask for real prices
+    assert h["top10"][0]["mic"] == "US" and isinstance(h["top10"][0]["held_by_you"], bool)  # one-click tracking; owned flag
 
 
 # ---------------------------------------------------------------- real data path (simulated Tiingo)
