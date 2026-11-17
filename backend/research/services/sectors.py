@@ -365,10 +365,14 @@ def sector_detail(db: Session, ticker: str, region_id: str = "us", benchmark: st
     held, watched = _held_listing_ids(db, _holdings_source(db)), set(db.scalars(select(m.WatchlistItem.listing_id)).all())
     hs = holdings_for(db, etf.ticker)
     sector_df = an.load_bars(db, lst.id).df if lst else pd.DataFrame()
+    from research.broker.service import last_success
+    run = last_success(db)  # your holdings (Portfolio Tracker or IBKR), by symbol, to flag top-10 stocks you own
+    my_symbols = {p.symbol.upper() for p in db.scalars(select(m.BrokerPositionRow).where(m.BrokerPositionRow.sync_run_id == run.id))} if run else set()
     top = []
     for h in hs[:10]:
         item = {"rank": h.rank, "name": h.name, "ticker": h.ticker, "weight_pct": h.weight_pct, "exchange": h.exchange,
-                "price_supported": _constituent_mic(region, h) is not None}
+                "price_supported": _constituent_mic(region, h) is not None, "mic": _constituent_mic(region, h),
+                "held_by_you": bool(h.ticker) and h.ticker.upper() in my_symbols}
         if ns == "real" and h.ticker and not sector_df.empty and item["price_supported"]:
             cl = _real_constituent_listing(db, region, h)
             item["analysis"] = _constituent(db, cl, sector_df, d["timeframe"], held, watched) if cl else None

@@ -524,7 +524,7 @@ export type SectorDetail = {
   trail?: RrgPoint[]; relative_chart?: { dates: string[]; sector: number[]; benchmark: number[]; relative: number[] };
   holdings: { source: string; as_of: string | null; fetched_at: string | null; count: number; top10_weight_pct: number | null;
     top10: { rank: number; name: string; ticker: string | null; weight_pct: number; exchange?: string | null; price_supported?: boolean;
-      analysis?: Constituent | null }[];
+      mic?: string | null; held_by_you?: boolean; analysis?: Constituent | null }[];
     missing_prices: string[]; unsupported_exchanges?: string[] };
   region?: { id: string; name: string; classification: string; currency: string; price_provider: string };
   constituents_in_app: Constituent[]; strongest: Constituent[]; weakest: Constituent[]; beating_sector: Constituent[];
