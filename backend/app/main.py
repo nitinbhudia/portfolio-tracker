@@ -15,6 +15,7 @@ load_env()  # .env in the app folder (git-ignored): ANTHROPIC_API_KEY for the as
 
 from app.db import models as m  # noqa: E402
 from app.services import benchmarks as BMS  # noqa: E402
+from app.services import autorefresh as AR  # noqa: E402
 from app.services import entries as E  # noqa: E402
 from app.services import favorites as FAV  # noqa: E402
 from app.services import maintenance as MT  # noqa: E402
@@ -33,6 +34,7 @@ async def lifespan(_app):
     m.init_db()
     if MT.supervised():  # started by scripts/dev.sh: back up both databases once a day (checked every 3 hours)
         MT.start_daily_backups()
+        AR.start()  # automatic daily price refresh (checks every 15 minutes)
     yield
 
 
@@ -618,3 +620,25 @@ def backup_restore(backup_id: str):
 def backup_download(backup_id: str):
     return Response(MT.backup_zip(backup_id), media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{backup_id}.zip"'})
+
+
+# ---------------------------------------------------------------- automatic daily price refresh
+
+class AutoRefreshIn(BaseModel):
+    enabled: bool
+
+
+@app.get("/api/auto-refresh")
+def auto_refresh(db: Session = Depends(get_db)):
+    return AR.status(db)
+
+
+@app.put("/api/auto-refresh")
+def auto_refresh_set(body: AutoRefreshIn, db: Session = Depends(get_db)):
+    return AR.set_enabled(db, body.enabled)
+
+
+@app.post("/api/auto-refresh/run")
+def auto_refresh_run(db: Session = Depends(get_db)):
+    AR.run_in_background()
+    return {**AR.status(db), "running": True}

@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.db import models as m
@@ -446,6 +446,34 @@ def current_prices(db: Session, st) -> dict[str, dict]:
         cur = out.get(pr.pool)
         if cur is None or pr.date >= cur["date"]:
             out[pr.pool] = {"price": pr.price, "date": pr.date, "source": pr.source, "row": None, "id": pr.id}
+    # Daily closes downloaded for Performance (Tiingo for US tickers, or your CSV): used when newer than the above.
+    for pool, (d, close, src) in _latest_closes(db, st).items():
+        cur = out.get(pool)
+        if cur is None or d > cur["date"]:
+            out[pool] = {"price": close, "date": d, "source": src, "row": None}
+    return out
+
+
+def _latest_closes(db: Session, st) -> dict[str, tuple]:
+    """pool -> (date, close, source) of its newest downloaded daily close: your CSV first, else Tiingo for US tickers."""
+    pools = {t.pool: (t.stock_key, t.currency) for t in st["rb"].trades}
+    wanted: dict[str, list[tuple[str, str]]] = {}
+    for pool, (key, cur) in pools.items():
+        wanted.setdefault(f"csv:{pool}", []).append((pool, "your CSV (daily close)"))
+        tk = st["tickers"].get(key) if cur == "USD" else None
+        if tk:
+            wanted.setdefault(tk, []).append((pool, f"Tiingo close ({tk})"))
+    if not wanted:
+        return {}
+    last = (select(m.StockPrice.series, func.max(m.StockPrice.date).label("d"))
+            .where(m.StockPrice.series.in_(list(wanted))).group_by(m.StockPrice.series).subquery())
+    rows = db.execute(select(m.StockPrice.series, m.StockPrice.date, m.StockPrice.close)
+                      .join(last, (m.StockPrice.series == last.c.series) & (m.StockPrice.date == last.c.d))).all()
+    out: dict[str, tuple] = {}
+    for series, d, close in sorted(rows, key=lambda r: not r[0].startswith("csv:")):  # CSV rows first: they win
+        for pool, src in wanted[series]:
+            if pool not in out:
+                out[pool] = (d, close, src)
     return out
 
 

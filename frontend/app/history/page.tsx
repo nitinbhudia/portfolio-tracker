@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+
+import { AutoRefreshCard } from "@/components/AutoRefreshCard";
 import { useEffect, useState } from "react";
 
 import { ErrorBox, Loading, Note, Section, Stat, btn, btnPrimary, input } from "@/components/ui";
@@ -74,6 +76,7 @@ export default function PriceHistoryPage() {
       <Note tone="slate">Daily prices let <Link className="underline" href="/performance">Performance</Link> value your positions day by day. US stocks: set the
         ticker and download from Tiingo (free key). Other listings: upload a CSV of daily prices per stock (e.g. Investing.com → the stock → Historical Data →
         Download), in the listing&apos;s own currency{" "}— pence for London. Without either, a stock is valued at its last trade price.</Note>
+      <AutoRefreshCard />
       <Section title="Tiingo download" right={s.key ? (
         <span className="flex gap-2">
           {live ? <button className={btn} onClick={() => act("/api/price-history/stop")}>Stop</button>

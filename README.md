@@ -85,6 +85,15 @@ If a port is busy, the script says which program is using it. Stop the app with 
 
 Gains are before fees and dividends, which the sheet doesn't record. This reports what happened; it isn't advice.
 
+## Automatic daily price refresh (Data ▾ Price history)
+
+While the app runs it checks every 15 minutes. Once a US trading day has closed (about 18:00 New York time; if the app was
+closed then, as soon as you open it) it updates exchange rates, Research (your holdings, Tiingo prices for everything it
+tracks, European prices if EODHD is set up, then alerts) and Performance's daily price history. If Tiingo's hourly limit
+leaves something over, it continues about an hour later until done. Positions, Overview and What-if then value each stock
+at its latest downloaded close when that's newer than the workbook's price. Switch it off, see what the last run did, or
+**Run now**, at the top of Data ▾ Price history. (Needs the app started by `Start Portfolio Tracker` / `scripts/dev.sh`.)
+
 ## Updates and backups (Data ▾ Updates & backups)
 
 - **Update now** checks GitHub for a newer version, lists what's new, backs up both databases, installs the new version
