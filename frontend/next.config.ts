@@ -4,6 +4,8 @@ import type { NextConfig } from "next";
 const backend = process.env.BACKEND_URL ?? "http://127.0.0.1:8001";
 
 const nextConfig: NextConfig = {
+  // The Mac app runs a built copy in its own folder (scripts/dev.sh --prod), apart from the development server's .next.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   experimental: { proxyTimeout: 120_000 }, // importing a large workbook and fetching ECB rates can take a while
   async rewrites() {
     return [

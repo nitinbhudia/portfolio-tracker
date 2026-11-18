@@ -85,6 +85,22 @@ If a port is busy, the script says which program is using it. Stop the app with 
 
 Gains are before fees and dividends, which the sheet doesn't record. This reports what happened; it isn't advice.
 
+## Mac app (no Terminal window)
+
+Double-click **Make Mac App** (in the app's folder) once. It builds **Portfolio Tracker.app** in your Applications folder
+(`~/Applications`), with its own icon, using tools every Mac has. Then open Portfolio Tracker from Launchpad, Spotlight or the
+Dock like any other app:
+
+- it starts everything in the background and opens the app's window when ready (a Chrome app window without browser
+  tabs if Google Chrome is installed, otherwise your default browser); click its Dock icon again to reopen the window;
+- **Quit** (Dock menu, or ⌘Q in the applet) stops everything;
+- it runs the built pages (faster than the Terminal starter's development mode); the first start, and the first after an
+  update, builds them (a minute or two);
+- if it can't start it says why and offers the log (`~/Library/Logs/Portfolio Tracker/app.log`);
+- updates from Data ▾ Updates & backups restart it by itself. Moved or renamed the folder? Double-click Make Mac App again.
+
+The Terminal starter (`Start Portfolio Tracker`) still works; don't run both at once (they use the same ports).
+
 ## Automatic daily price refresh (Data ▾ Price history)
 
 While the app runs it checks every 15 minutes. Once a US trading day has closed (about 18:00 New York time; if the app was
