@@ -34,6 +34,7 @@ const DATA = [
   { href: "/stocks", label: "Names" },
   { href: "/check", label: "Check vs sheet" },
   { href: "/import", label: "Import" },
+  { href: "/maintenance", label: "Updates & backups" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -44,6 +45,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [pending, setPending] = useState(0);
   // null = not known yet; pages only load (and ask the backend for results) once an import exists
   const [imported, setImported] = useState<boolean | null>(null);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+
+  useEffect(() => {  // once per browser session: is a newer version on GitHub? (the Updates page refreshes it)
+    try {
+      const known = sessionStorage.getItem("pt-update");
+      if (known !== null) { setUpdateAvailable(known === "1"); return; }
+    } catch { /* ignore */ }
+    apiFetch<{ update_available: boolean }>("/api/maintenance/check").then((c) => {
+      setUpdateAvailable(c.update_available);
+      try { sessionStorage.setItem("pt-update", c.update_available ? "1" : "0"); } catch { /* ignore */ }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const load = () => apiFetch<Status>("/api/status")
@@ -68,9 +81,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }, [path]);
 
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
-  const badge = (href: string) => href === "/review" && pending > 0 && (
+  const badge = (href: string) => (href === "/review" && pending > 0 && (
     <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${pending} rows to review`}>{pending}</span>
-  );
+  )) || (href === "/maintenance" && updateAvailable && (
+    <span className="ml-1 rounded-full bg-emerald-600 px-1.5 text-[10px] font-bold text-white" aria-label="An update is available">new</span>
+  ));
   return (
     <RangeProvider>
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
@@ -86,7 +101,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <div className="relative">
               <button aria-expanded={dataOpen} aria-haspopup="true" onClick={() => setDataOpen(!dataOpen)}
                 className={`whitespace-nowrap rounded px-2 py-1.5 text-sm ${DATA.some((n) => active(n.href)) ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
-                Data{pending > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${pending} rows to review`}>{pending}</span>} ▾
+                Data{updateAvailable && <span className="ml-1 inline-block h-2 w-2 rounded-full bg-emerald-600 align-middle" aria-label="An update is available" />}{pending > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${pending} rows to review`}>{pending}</span>} ▾
               </button>
               {dataOpen && (
                 <div className="absolute left-0 top-full z-20 mt-1 flex w-48 flex-col rounded-md border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">

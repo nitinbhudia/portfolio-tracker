@@ -81,6 +81,17 @@ If a port is busy, the script says which program is using it. Stop the app with 
 
 Gains are before fees and dividends, which the sheet doesn't record. This reports what happened; it isn't advice.
 
+## Updates and backups (Data ▾ Updates & backups)
+
+- **Update now** checks GitHub for a newer version, lists what's new, backs up both databases, installs the new version
+  into this folder and restarts the app; the page reloads by itself. Never touched: your data (`*.db`), keys (`.env`),
+  backups, installed packages. Packages are re-installed on restart if the new version needs different ones.
+- **Backups** of both databases go to `backups/` in the app's folder: one a day automatically (last 14 kept), one before
+  every update or restore, and whenever you press **Back up now**. **Restore** puts one back (after backing up the
+  current state) and restarts the app; **download** saves a backup as a ZIP.
+- The automatic restart needs the app to be started by `Start Portfolio Tracker` / `scripts/dev.sh` of this version or
+  later; with an older starter, close its Terminal window and start it again after an update.
+
 ## Shortcuts panel
 
 The panel on the left lists shortcuts to pages you use often (it starts with a few). On any page, **☆ Add this page**
