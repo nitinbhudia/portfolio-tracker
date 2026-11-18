@@ -2,6 +2,7 @@
 # Portfolio Tracker — one-command setup and start (macOS / Linux).
 #   ./scripts/dev.sh          install (if needed) and start: http://localhost:3001
 #   ./scripts/dev.sh --test   run the tests, lint and build, then exit
+#   ./scripts/dev.sh --prod   start the built app (built when needed; faster pages): used by the Mac app
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -9,12 +10,16 @@ API_PORT=8001
 WEB_PORT=3001
 
 TEST=0
+PROD=0
 for a in "$@"; do
   case "$a" in
     --test) TEST=1 ;;
+    --prod) PROD=1 ;;
     *) echo "unknown option: $a"; exit 2 ;;
   esac
 done
+MODE_ARG=""
+[ "$PROD" = 1 ] && MODE_ARG="--prod"
 
 PY=""
 for c in python3.13 python3.12 python3.11 python3; do
@@ -47,6 +52,20 @@ if [ "$TEST" = 1 ]; then
   exit 0
 fi
 
+# --prod: build the pages once (and again whenever an update changed them), in their own folder (.next-prod), so the
+# development server of the Terminal starter (.next) never mixes with the built app.
+export NEXT_DIST_DIR=".next"
+if [ "$PROD" = 1 ]; then
+  export NEXT_DIST_DIR=".next-prod"
+  SRC_SHA=$(cd frontend && for f in app components lib public package-lock.json next.config.ts tsconfig.json postcss.config.mjs; do
+      if [ -e "$f" ]; then find "$f" -type f; fi; done | LC_ALL=C sort | while read -r f; do sha "$f"; done \
+    | { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi; } | cut -d' ' -f1)
+  if [ ! -f "frontend/.next-prod/BUILD_ID" ] || [ "$(cat .run/build.sha 2>/dev/null)" != "$SRC_SHA" ]; then
+    echo "Building the app's pages (a minute or two; only after an update)…"
+    (cd frontend && npx next build) && echo "$SRC_SHA" > .run/build.sha
+  fi
+fi
+
 # Refuse to start on busy ports, and say what is using them. After an in-app restart, wait for the old copy to let go.
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null || { command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }; }
 if [ "${PT_RESTARTING:-0}" = 1 ]; then
@@ -72,8 +91,9 @@ kill_tree() {
   kill "$pid" 2>/dev/null || true
 }
 stop_all() { kill_tree "${WEB_PID:-}"; kill_tree "${API_PID:-}"; }
-trap 'stop_all; exit 0' INT TERM
-trap 'stop_all' EXIT
+echo $$ > .run/dev.pid   # the Mac app uses this to stop everything (an in-app restart keeps the same process)
+trap 'stop_all; rm -f .run/dev.pid; exit 0' INT TERM
+trap 'stop_all; rm -f .run/dev.pid' EXIT
 
 # PT_SUPERVISED tells the app it may restart itself (after an update or a restore): it writes .restart-requested
 # and ends its backend; this script then stops the frontend and starts everything again from the new files.
@@ -82,7 +102,11 @@ rm -f .restart-requested
 API_PID=$!
 sleep 2
 if ! kill -0 "$API_PID" 2>/dev/null; then echo "The backend didn't start (see the error above)."; exit 1; fi
-(cd frontend && exec npx next dev -p $WEB_PORT) &
+if [ "$PROD" = 1 ]; then
+  (cd frontend && exec npx next start -p $WEB_PORT) &
+else
+  (cd frontend && exec npx next dev -p $WEB_PORT) &
+fi
 WEB_PID=$!
 
 echo ""
@@ -96,6 +120,7 @@ if [ -f .restart-requested ]; then
   echo ""
   echo "Restarting Portfolio Tracker (after an update or a restore)…"
   rm -f .restart-requested
-  PT_RESTARTING=1 exec bash "$ROOT/scripts/dev.sh"
+  PT_RESTARTING=1 exec bash "$ROOT/scripts/dev.sh" $MODE_ARG
 fi
+rm -f .run/dev.pid
 echo "Portfolio Tracker stopped."
