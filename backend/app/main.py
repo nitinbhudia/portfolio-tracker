@@ -16,6 +16,7 @@ load_env()  # .env in the app folder (git-ignored): ANTHROPIC_API_KEY for the as
 from app.db import models as m  # noqa: E402
 from app.services import benchmarks as BMS  # noqa: E402
 from app.services import entries as E  # noqa: E402
+from app.services import favorites as FAV  # noqa: E402
 from app.services import groups as GS  # noqa: E402
 from app.services import history as HS  # noqa: E402
 from app.services import assistant as AS  # noqa: E402
@@ -541,3 +542,19 @@ class GroupAssignIn(BaseModel):
 @app.put("/api/groups/assign")
 def groups_assign(body: GroupAssignIn, db: Session = Depends(get_db)):
     return GS.assign(db, body.ids, body.group)
+
+
+# ---------------------------------------------------------------- shortcuts panel
+
+class FavoritesIn(BaseModel):
+    items: list[dict]
+
+
+@app.get("/api/favorites")
+def favorites(db: Session = Depends(get_db)):
+    return FAV.get(db)
+
+
+@app.put("/api/favorites")
+def save_favorites(body: FavoritesIn, db: Session = Depends(get_db)):
+    return FAV.put(db, body.items)
