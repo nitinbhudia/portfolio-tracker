@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,7 @@ from app.db import models as m  # noqa: E402
 from app.services import benchmarks as BMS  # noqa: E402
 from app.services import entries as E  # noqa: E402
 from app.services import favorites as FAV  # noqa: E402
+from app.services import maintenance as MT  # noqa: E402
 from app.services import groups as GS  # noqa: E402
 from app.services import history as HS  # noqa: E402
 from app.services import assistant as AS  # noqa: E402
@@ -30,6 +31,8 @@ MAX_UPLOAD = 50 * 1024 * 1024
 @asynccontextmanager
 async def lifespan(_app):
     m.init_db()
+    if MT.supervised():  # started by scripts/dev.sh: back up both databases once a day (checked every 3 hours)
+        MT.start_daily_backups()
     yield
 
 
@@ -558,3 +561,42 @@ def favorites(db: Session = Depends(get_db)):
 @app.put("/api/favorites")
 def save_favorites(body: FavoritesIn, db: Session = Depends(get_db)):
     return FAV.put(db, body.items)
+
+
+# ---------------------------------------------------------------- updates and backups
+
+@app.get("/api/maintenance")
+def maintenance():
+    return {"version": MT.current_version(), "supervised": MT.supervised(), "backups": MT.list_backups(),
+            "backups_folder": str(MT.backups_dir())}
+
+
+@app.get("/api/maintenance/check")
+def maintenance_check():
+    return MT.check()
+
+
+@app.post("/api/maintenance/update")
+def maintenance_update():
+    return MT.update()
+
+
+@app.post("/api/backups")
+def backup_now():
+    return MT.backup("manual")
+
+
+@app.delete("/api/backups/{backup_id}")
+def backup_delete(backup_id: str):
+    return {"backups": MT.delete_backup(backup_id)}
+
+
+@app.post("/api/backups/{backup_id}/restore")
+def backup_restore(backup_id: str):
+    return MT.restore(backup_id)
+
+
+@app.get("/api/backups/{backup_id}/download")
+def backup_download(backup_id: str):
+    return Response(MT.backup_zip(backup_id), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{backup_id}.zip"'})

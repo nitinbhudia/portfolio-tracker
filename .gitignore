@@ -13,6 +13,12 @@ data/
 !backend/research/data/
 !backend/research/data/**
 !backend/tests_research/fixtures/**
+# backups, update and restart bookkeeping (made by the app on your computer)
+backups/
+.run/
+version.json
+.installed-files.json
+.restart-requested
 # tooling
 .venv/
 __pycache__/
