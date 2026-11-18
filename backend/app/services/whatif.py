@@ -220,6 +220,22 @@ def simulate_average_down(db: Session, pool: str, buy_price: float | None = None
     return out
 
 
+def simulate_buy_zones(db: Session, pool: str, zones: list[dict], shares: float | None = None, amount_usd: float | None = None,
+                       fee: float = 0.0) -> dict:
+    if not zones:
+        raise BadRequest("Give at least one buy price.")
+    if len(zones) > 30:
+        raise BadRequest("At most 30 buy prices.")
+    hs, today, _, _ = holdings(db)
+    try:
+        h = W.select(hs, [pool])[0]
+        out = W.buy_zones(h, today, zones, shares, amount_usd, fee)
+    except W.WhatIfError as e:
+        raise BadRequest(str(e)) from e
+    out["as_of"] = today.isoformat()
+    return out
+
+
 def losers(db: Session) -> list[dict]:
     """Open positions below their FIFO cost, biggest loss first (for the average-down picker)."""
     rows = overview(db)["holdings"]

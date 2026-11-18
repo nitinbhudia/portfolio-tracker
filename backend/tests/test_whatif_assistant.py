@@ -244,3 +244,22 @@ def test_explore_portfolio_map(client):  # noqa: F811
     (lot,) = a["lots"]
     assert lot["bought"] == "2024-02-01" and lot["shares"] == 5 and lot["gain_usd"] == pytest.approx(75)
     assert r["total_usd"] == pytest.approx(691)
+
+
+def test_buy_zones_by_hand(client):  # noqa: F811
+    upload(client)
+    a = pools(client)["Alpha Corp"]  # 5 shares, FIFO cost 110 each (550), price 125
+    zones = [{"label": "38.2% retracement", "price": 115}, {"label": "61.8% retracement", "price": 100}, {"label": "bad", "price": 0}]
+    r = client.post("/api/whatif/buy-zones", json={"pool": a["pool"], "zones": zones}).json()
+    z1, z2 = r["zones"]  # price 0 dropped
+    assert z1["shares"] == 5 and z1["break_even"] == pytest.approx((550 + 5 * 115) / 10) and z1["below_today_pct"] == pytest.approx(-8)
+    assert z2["break_even"] == pytest.approx(105) and z2["money_usd"] == pytest.approx(500)
+    assert z2["if_falls_further_usd"] == pytest.approx(10 * 80 - 1050)
+    r = client.post("/api/whatif/buy-zones", json={"pool": a["pool"], "zones": zones[:2], "amount_usd": 250}).json()
+    assert [z["shares"] for z in r["zones"]] == [2, 2]  # floor(250/115), floor(250/100)
+    r = client.post("/api/whatif/buy-zones", json={"pool": a["pool"], "zones": zones[:2], "shares": 3}).json()
+    assert r["zones"][1]["break_even"] == pytest.approx((550 + 300) / 8)
+    for bad, msg in [({"zones": []}, "at least one"), ({"zones": zones[:1], "shares": 1, "amount_usd": 5}, "not both"),
+                     ({"zones": zones[:1], "shares": -1}, "more than 0")]:
+        res = client.post("/api/whatif/buy-zones", json={"pool": a["pool"], **bad})
+        assert res.status_code == 400 and msg in res.json()["message"], bad
