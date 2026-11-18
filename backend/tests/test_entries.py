@@ -111,3 +111,16 @@ def test_prices_typed_and_from_an_updated_workbook(client):  # noqa: F811
     p = pos(client)
     assert p["Alpha Corp"]["price"] == 150 and "newer.xlsx" in p["Alpha Corp"]["price_source"]
     assert client.get("/api/status").json()["review_pending"] == 5  # trades and review untouched
+
+
+def test_favorites_defaults_save_and_validation(client):  # noqa: F811
+    d = client.get("/api/favorites").json()
+    assert d["is_default"] and d["items"][0] == {"href": "/", "label": "Overview"}
+    r = client.put("/api/favorites", json={"items": [{"href": "/research/sectors/XLK?region=us", "label": "  Tech   sector "},
+                                                     {"href": "/research/sectors/XLK?region=us", "label": "dup"}]}).json()
+    assert r == {"items": [{"href": "/research/sectors/XLK?region=us", "label": "Tech sector"}], "is_default": False}
+    assert client.get("/api/favorites").json()["items"][0]["label"] == "Tech sector"
+    for bad in ["https://evil.example", "//evil.example", "positions"]:
+        assert client.put("/api/favorites", json={"items": [{"href": bad, "label": "x"}]}).status_code == 400
+    assert client.put("/api/favorites", json={"items": [{"href": "/", "label": " "}]}).status_code == 400
+    assert client.put("/api/favorites", json={"items": []}).json() == {"items": [], "is_default": False}  # an empty list stays empty

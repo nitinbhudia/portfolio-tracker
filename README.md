@@ -81,6 +81,13 @@ If a port is busy, the script says which program is using it. Stop the app with 
 
 Gains are before fees and dividends, which the sheet doesn't record. This reports what happened; it isn't advice.
 
+## Shortcuts panel
+
+The panel on the left lists shortcuts to pages you use often (it starts with a few). On any page, **☆ Add this page**
+adds it, including specific ones like a sector or a stock's analysis. Hover a shortcut to rename (✎), reorder (↑ ↓) or
+remove it (✕). « collapses the panel to a slim bar. On a narrow window, the **★ Shortcuts** button at the bottom-left
+opens it. Shortcuts are saved in the app's database (`backend/portfolio.db`), so they move with it.
+
 ## Research (the former Fibonacci AI app)
 
 The **Research** tab is the Fibonacci AI app, now part of Portfolio Tracker: one start button, one `.env`, one Terminal

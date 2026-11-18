@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { apiFetch, type Status, STATUS_EVENT } from "@/lib/api";
 
+import { Favorites } from "./Favorites";
 import { RangeProvider } from "./RangePicker";
 
 const NAV = [
@@ -112,6 +113,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </nav>
         )}
       </header>
+      <div className="flex">
+        <Suspense fallback={null}><Favorites /></Suspense>
+        <div className="min-w-0 flex-1">
       <main className="mx-auto max-w-7xl px-3 py-4 sm:px-4">
         {imported === null && !path.startsWith("/import") ? (
           <div role="status" className="p-6 text-sm text-slate-500">Loading…</div>
@@ -127,6 +131,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <footer className="mx-auto max-w-7xl px-4 pb-8 pt-4 text-xs text-slate-500">
         Runs on your computer; your data stays in a local database. Reports what happened, not advice. Fees and dividends count once entered on the Data pages.
       </footer>
+        </div>
+      </div>
     </RangeProvider>
   );
 }
