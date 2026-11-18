@@ -310,3 +310,41 @@ def average_down(h: Holding, today: date, buy_price: float | None = None, shares
                   "only the added shares later realises a loss even at the new break-even. Before tax; past realised gains or "
                   "losses aren't included" + (". Non-USD: break-even prices use today's exchange rate." if h.currency != "USD" else ".")),
     }
+
+
+def buy_zones(h: Holding, today: date, zones: list[dict], shares: float | None = None, amount_usd: float | None = None,
+              fee: float = 0.0) -> dict:
+    """The average-down maths at several possible buy prices (e.g. Fibonacci levels below today's price).
+
+    zones: [{"label", "price"}] in the listing's units. Size per zone: `shares`, or as many whole shares as `amount_usd`
+    buys at that price, or (neither) as many shares as you hold now (doubling the position)."""
+    if h.price is None or h.rate is None:
+        raise WhatIfError(f"{h.stock}: no current price or exchange rate. Add a price on the Prices page.")
+    if h.cost_usd is None or h.shares <= 0:
+        raise WhatIfError(f"{h.stock}: the cost of some purchases isn't known in USD.")
+    if shares is not None and amount_usd is not None:
+        raise WhatIfError("Give shares or an amount, not both.")
+    if (shares is not None and shares <= 0) or (amount_usd is not None and amount_usd <= 0):
+        raise WhatIfError("The size must be more than 0.")
+    k = h.scale * h.rate
+    fee_usd = fee * h.rate
+    avg = h.cost_usd / h.shares
+    out = []
+    for z in zones:
+        p = float(z["price"])
+        if p <= 0:
+            continue
+        n = shares if shares is not None else math.floor(max(0.0, amount_usd - fee_usd) / (p * k) + 1e-9) if amount_usd is not None \
+            else math.ceil(h.shares - 1e-9)
+        row = {"label": str(z.get("label") or ""), "price": p, "below_today_pct": (p / h.price - 1) * 100, "shares": n}
+        if n and n > 0:
+            plan = _plan(h, p * k, n, fee_usd)
+            row.update(plan)
+            row["break_even"] = plan["break_even_usd"] / k
+        out.append(row)
+    return {"pool": h.pool, "stock": h.stock, "currency": h.currency, "pence": h.scale == 0.01, "price": h.price,
+            "now": {"shares": h.shares, "break_even": avg / k, "rise_needed_pct": (avg / h.unit_usd - 1) * 100,
+                    "if_falls_further_usd": h.shares * h.unit_usd * (1 - STRESS / 100) - h.cost_usd},
+            "zones": out, "stress_pct": STRESS,
+            "notes": ("Fibonacci levels are reference levels where prices have often paused, not promises that the price will "
+                      "reach or hold them. Break-even is for the whole position. Before tax.")}

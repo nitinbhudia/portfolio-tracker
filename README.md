@@ -71,6 +71,10 @@ If a port is busy, the script says which program is using it. Stop the app with 
    target break-even, at today's price or a lower one; compares with doing nothing (rise needed, loss if it falls another
    20%), shows what FIFO would realise if you later sold only the added shares, and a table of buy prices (today, −10/−20/−30%)
    by size (+50%, +100%, +200%). Simulations only: nothing is traded. Maths, not advice.
+   **Fibonacci buy zones** (on the same tab): the stock's Fibonacci levels below today's price, from Research, each with the
+   extra money, new break-even, rise needed and downside if you bought there (as many shares as you hold, a number of
+   shares, or a USD amount); **use** puts a zone into the calculator. If Research has no analysis yet, one click
+   calculates it. A warning shows when Research's price and the tracker's price disagree (wrong ticker or a missed split).
 10. **Ask**: type questions such as "if I sell all my Microsoft now, what's my P&L?". Claude (Anthropic's API) answers by
    calling the app's own what-if calculations, so every figure comes from the app; the calculations used are shown under
    each answer. Needs an Anthropic API key: copy `.env.example` to `.env` in the app's folder, put the key after

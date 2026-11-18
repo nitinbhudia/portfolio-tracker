@@ -6,6 +6,8 @@ import { ErrorBox, Section, Stat, Usd, btnPrimary, input } from "@/components/ui
 import { ApiError, apiFetch, jsonInit, type ADPlan, type ADResp, type WIOverview } from "@/lib/api";
 import { num, pct, qty, usd } from "@/lib/format";
 
+import { BuyZones } from "./BuyZones";
+
 type Mode = "shares" | "amount_usd" | "target_break_even";
 const MODES: [Mode, string][] = [["shares", "Shares to buy"], ["amount_usd", "Amount (USD)"], ["target_break_even", "Target break-even"]];
 
@@ -56,6 +58,9 @@ export default function AverageDownTab({ o }: { o: WIOverview }) {
         <p className="mt-2 text-xs text-slate-500">Leave the plan empty to see only the standard table. Whole shares for an amount or a target.</p>
       </Section>
       <ErrorBox error={err} />
+      {h && <BuyZones pool={pool} stock={h.stock} currency={h.currency} unit={unit}
+        onUse={(bp, n) => { setPrice(String(Number(bp.toFixed(4)))); setMode("shares"); setValue(String(n)); run({ pool, buy_price: bp, shares: n });
+          window.scrollTo({ top: 0, behavior: "smooth" }); }} />}
       {r && <Result r={r} />}
     </div>
   );

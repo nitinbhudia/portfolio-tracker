@@ -413,6 +413,24 @@ def whatif_average_down(body: AverageDownIn, db: Session = Depends(get_db)):
     return WS.simulate_average_down(db, body.pool, body.buy_price, body.shares, body.amount_usd, body.target_break_even, body.fee)
 
 
+class BuyZone(BaseModel):
+    label: str = ""
+    price: float
+
+
+class BuyZonesIn(BaseModel):
+    pool: str
+    zones: list[BuyZone]
+    shares: float | None = None
+    amount_usd: float | None = None
+    fee: float = 0.0
+
+
+@app.post("/api/whatif/buy-zones")
+def whatif_buy_zones(body: BuyZonesIn, db: Session = Depends(get_db)):
+    return WS.simulate_buy_zones(db, body.pool, [z.model_dump() for z in body.zones], body.shares, body.amount_usd, body.fee)
+
+
 @app.get("/api/explore/portfolio")
 def explore_portfolio(db: Session = Depends(get_db)):
     return WS.portfolio_map(db)
