@@ -66,7 +66,7 @@ case "${1:-}" in
     fi
     # anything still holding the app's ports (e.g. after a crash) goes too
     if command -v lsof >/dev/null 2>&1; then
-      for port in 3001 8001; do lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null; done
+      for port in 3001 8001 8002; do lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null; done
     fi
     rm -f "$RUN/dev.pid"
     echo "=== $(date '+%Y-%m-%d %H:%M:%S') stopped by the app ===" >> "$LOG"

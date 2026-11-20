@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 
 import { AlertSettings } from "@/components/research/AlertSettings";
 import { type Column, DataTable } from "@/components/research/DataTable";
-import { Empty, ErrorBox, Loading, ProvenanceBadge, Section } from "@/components/research/ui";
+import { Empty, ErrorBox, Loading, ProvenanceBadge, Section, RealTag } from "@/components/research/ui";
 import { type AlertEval, type AlertRow, type AlertsResp, apiFetch, ApiError, notifyAlerts, useApi } from "@/lib/research/api";
 import { fmtTimestamp } from "@/lib/research/format";
 import { fmtOperand } from "@/lib/research/setups";
@@ -34,7 +34,7 @@ function makeColumns(markRead: (id: number) => void, select: (id: number) => voi
         className="font-medium hover:underline">{r.listing.ticker}</Link> },
     { key: "data", label: "Data", type: "enum", labels: { real: "Real", synthetic: "Synthetic" }, get: (r) => r.namespace,
       render: (r) => r.namespace === "real"
-        ? <span className="rounded bg-emerald-700 px-1 text-[10px] font-bold uppercase text-white">Real</span>
+        ? <RealTag small />
         : <span className="rounded bg-violet-600 px-1 text-[10px] font-bold uppercase text-white">Synth</span> },
     { key: "type", label: "Type", type: "enum", get: (r) => r.type_label },
     { key: "dir", label: "Dir.", type: "enum", get: (r) => r.direction,

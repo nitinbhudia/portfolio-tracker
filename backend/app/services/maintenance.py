@@ -39,7 +39,7 @@ ROOT = m.BACKEND_DIR.parent  # the app's folder
 MAX_ZIP = 60 * 1024 * 1024
 KEEP = {"daily": 14, "manual": 20, "before-update": 5, "before-restore": 5}
 # Never written or deleted by an update (relative paths, fnmatch patterns).
-PROTECTED = [".env", "*.db", "*.db-journal", "*.db-wal", "*.db-shm", "*.sqlite", "backups/*", ".venv/*", "*/node_modules/*",
+PROTECTED = [".env", "*.db", "*.db-journal", "*.db-wal", "*.db-shm", "*.sqlite", "backups/*", "backend/demo-data/*", ".venv/*", "*/node_modules/*",
              "node_modules/*", "*/.next/*", "*/.next-prod/*", ".git/*", ".run/*", "uploads/*", "version.json", ".installed-files.json",
              ".restart-requested"]
 REQUIRED = ["scripts/dev.sh", "backend/app/main.py", "frontend/package.json", "backend/requirements.txt"]

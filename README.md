@@ -101,6 +101,25 @@ Dock like any other app:
 
 The Terminal starter (`Start Portfolio Tracker`) still works; don't run both at once (they use the same ports).
 
+## Demo mode (show the app without your data)
+
+The **Live | Demo** switch at the top right swaps the whole app to a made-up portfolio: twenty invented companies
+(Northwind Robotics, Helix Analytics, Rheinwerk AG, Thameside Holdings plc…), bought and sold since 2021 in USD, EUR and
+GBP, with deposits, dividends, sale groups, sectors, price history, benchmarks and a full Research section (watchlist,
+scanner, sector rotation, alerts, Fibonacci levels). Every page works, so you can show any feature. A yellow bar on every
+page says you are in the demo; **Back to Live** returns to your portfolio.
+
+How your data stays out of it:
+- The demo is a separate copy of the backend (port 8002) with its own databases in `backend/demo-data/`. It never opens
+  `portfolio.db` or `fibonacci_ai.db`, so nothing it shows can come from them.
+- It doesn't read your keys from `.env` (only the Claude key, so **Ask** works on the made-up data).
+- It sends nothing to the internet: price, exchange-rate and index requests are answered on the spot by a made-up market,
+  and anything else (GitHub, your broker) is refused. Updates & backups are switched off in the demo.
+- If the demo copy isn't running, Demo pages show an error, never your data.
+
+Change anything you like in the demo (import, trades, watchlist…); **Reset demo data** in the yellow bar rebuilds it
+(about half a minute). The demo is built the first time the app starts (also about half a minute).
+
 ## Automatic daily price refresh (Data ▾ Price history)
 
 While the app runs it checks every 15 minutes. Once a US trading day has closed (about 18:00 New York time; if the app was
