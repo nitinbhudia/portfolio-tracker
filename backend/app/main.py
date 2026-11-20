@@ -13,6 +13,12 @@ from app.core_env import load_env
 
 load_env()  # .env in the app folder (git-ignored): ANTHROPIC_API_KEY for the assistant
 
+from app import demo as DEMO  # noqa: E402
+
+if DEMO.DEMO:  # the demo copy (port 8002): made-up data only, and every request goes through the demo network guard
+    from app.demo import network as _demo_network
+    _demo_network.install()
+
 from app.db import models as m  # noqa: E402
 from app.services import benchmarks as BMS  # noqa: E402
 from app.services import autorefresh as AR  # noqa: E402
@@ -24,6 +30,7 @@ from app.services import history as HS  # noqa: E402
 from app.services import assistant as AS  # noqa: E402
 from app.services import portfolio as P  # noqa: E402
 from app.services import whatif as WS  # noqa: E402
+from app.demo import service as DS  # noqa: E402
 
 MAX_UPLOAD = 50 * 1024 * 1024
 
@@ -31,7 +38,10 @@ MAX_UPLOAD = 50 * 1024 * 1024
 
 @asynccontextmanager
 async def lifespan(_app):
+    missing = DEMO.DEMO and not (DEMO.TRACKER_DB.exists() and DEMO.RESEARCH_DB.exists())
     m.init_db()
+    if missing:  # scripts/dev.sh builds the demo before starting; this is only a fallback
+        DS.reset()
     if MT.supervised():  # started by scripts/dev.sh: back up both databases once a day (checked every 3 hours)
         MT.start_daily_backups()
         AR.start()  # automatic daily price refresh (checks every 15 minutes)
@@ -585,38 +595,46 @@ def save_favorites(body: FavoritesIn, db: Session = Depends(get_db)):
 
 # ---------------------------------------------------------------- updates and backups
 
+def live_only():
+    """Updates and backups work on your real copy only: the demo can't see, restore or replace them."""
+    if DEMO.DEMO:
+        raise P.BadRequest("Updates & backups are switched off in demo mode. Switch to Live to use them.")
+
+
 @app.get("/api/maintenance")
 def maintenance():
+    if DEMO.DEMO:
+        return {"version": MT.current_version(), "supervised": False, "backups": [], "backups_folder": None, "demo": True}
     return {"version": MT.current_version(), "supervised": MT.supervised(), "backups": MT.list_backups(),
-            "backups_folder": str(MT.backups_dir())}
+            "backups_folder": str(MT.backups_dir()), "demo": False}
 
 
-@app.get("/api/maintenance/check")
+@app.get("/api/maintenance/check", dependencies=[Depends(live_only)])
 def maintenance_check():
     return MT.check()
 
 
-@app.post("/api/maintenance/update")
+@app.post("/api/maintenance/update", dependencies=[Depends(live_only)])
 def maintenance_update():
     return MT.update()
 
 
-@app.post("/api/backups")
+@app.post("/api/backups", dependencies=[Depends(live_only)])
 def backup_now():
     return MT.backup("manual")
 
 
-@app.delete("/api/backups/{backup_id}")
+@app.delete("/api/backups/{backup_id}", dependencies=[Depends(live_only)])
 def backup_delete(backup_id: str):
     return {"backups": MT.delete_backup(backup_id)}
 
 
-@app.post("/api/backups/{backup_id}/restore")
+@app.post("/api/backups/{backup_id}/restore", dependencies=[Depends(live_only)])
 def backup_restore(backup_id: str):
     return MT.restore(backup_id)
 
 
-@app.get("/api/backups/{backup_id}/download")
+@app.get("/api/backups/{backup_id}/download", dependencies=[Depends(live_only)])
 def backup_download(backup_id: str):
     return Response(MT.backup_zip(backup_id), media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{backup_id}.zip"'})
@@ -642,3 +660,18 @@ def auto_refresh_set(body: AutoRefreshIn, db: Session = Depends(get_db)):
 def auto_refresh_run(db: Session = Depends(get_db)):
     AR.run_in_background()
     return {**AR.status(db), "running": True}
+
+
+# ---------------------------------------------------------------- demo mode
+
+@app.get("/api/mode")
+def mode(db: Session = Depends(get_db)):
+    """Live or demo: the frontend's switch and banner come from this answer (what is really served), not the cookie."""
+    return DS.info(db)
+
+
+@app.post("/api/demo/reset")
+def demo_reset(db: Session = Depends(get_db)):
+    if not DEMO.DEMO:
+        raise P.BadRequest("Reset exists in demo mode only: your real data is never reset.")
+    return DS.reset(db)

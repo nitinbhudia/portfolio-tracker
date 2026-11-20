@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { AddStock } from "@/components/research/AddStock";
 import { type Column, DataTable, type Preset } from "@/components/research/DataTable";
 import { SetupBreakdown, SetupChips } from "@/components/research/Setups";
-import { ClassBadge, Empty, ErrorBox, Loading, ProvenanceBadge, Section, Warn } from "@/components/research/ui";
+import { ClassBadge, Empty, ErrorBox, Loading, ProvenanceBadge, Section, Warn, RealTag } from "@/components/research/ui";
 import { WatchStar } from "@/components/research/WatchStar";
 import { apiFetch, ApiError, type Horizon, type ScanResp, type ScanRow, type SetupCatalogItem, useApi } from "@/lib/research/api";
 import { fmtTimestamp, num, pct, signClass } from "@/lib/research/format";
@@ -28,7 +28,7 @@ function makeColumns(h: Horizon, catalog: SetupCatalogItem[], select: (id: numbe
       render: (r) => <span className="inline-block max-w-48 truncate align-bottom text-xs" title={r.listing.name}>{r.listing.tracks ?? r.listing.name}</span> },
     { key: "data", label: "Data", type: "enum", labels: { real: "Real", synthetic: "Synthetic" }, get: (r) => r.namespace,
       render: (r) => r.namespace === "real"
-        ? <span className="rounded bg-emerald-700 px-1 text-[10px] font-bold uppercase text-white">Real</span>
+        ? <RealTag small />
         : <span className="rounded bg-violet-600 px-1 text-[10px] font-bold uppercase text-white">Synth</span> },
     { key: "type", label: "Type", type: "enum", get: (r) => r.listing.asset_class },
     { key: "exchange", label: "Exch.", type: "enum", get: (r) => r.listing.exchange },

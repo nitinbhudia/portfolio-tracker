@@ -8,6 +8,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 API_PORT=8001
 WEB_PORT=3001
+DEMO_PORT=8002   # demo mode: a second backend with made-up data only (the Live/Demo switch in the app)
 
 TEST=0
 PROD=0
@@ -45,6 +46,12 @@ if [ ! -d frontend/node_modules ] || [ "$(cat .run/npm-lock.sha 2>/dev/null)" !=
 fi
 # Research (the former Fibonacci AI app): bring its database up to date and add the demo data on first run.
 (cd backend && alembic -c research/alembic.ini upgrade head >/dev/null && python -m research.data.seed)
+# Demo mode's made-up data (its own folder, backend/demo-data/): built once, about half a minute. Never touches your data.
+if (cd backend && PT_DEMO=1 python -m app.demo.build --if-missing >"$ROOT/.run/demo-build.log" 2>&1); then
+  grep -v '^INFO' .run/demo-build.log | tail -n 2
+else
+  echo "(The demo data couldn't be built, see .run/demo-build.log; the app works without it.)"
+fi
 
 if [ "$TEST" = 1 ]; then
   (cd backend && python -m pytest -q)
@@ -69,10 +76,10 @@ fi
 # Refuse to start on busy ports, and say what is using them. After an in-app restart, wait for the old copy to let go.
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null || { command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }; }
 if [ "${PT_RESTARTING:-0}" = 1 ]; then
-  for _ in $(seq 1 30); do port_busy $API_PORT || port_busy $WEB_PORT || break; sleep 1; done
+  for _ in $(seq 1 30); do port_busy $API_PORT || port_busy $WEB_PORT || port_busy $DEMO_PORT || break; sleep 1; done
 fi
 busy=0
-for p in $API_PORT $WEB_PORT; do
+for p in $API_PORT $WEB_PORT $DEMO_PORT; do
   if port_busy "$p"; then
     echo ""
     echo "Port $p is already in use:"
@@ -90,7 +97,7 @@ kill_tree() {
   for child in $(pgrep -P "$pid" 2>/dev/null); do kill_tree "$child"; done
   kill "$pid" 2>/dev/null || true
 }
-stop_all() { kill_tree "${WEB_PID:-}"; kill_tree "${API_PID:-}"; }
+stop_all() { kill_tree "${WEB_PID:-}"; kill_tree "${API_PID:-}"; kill_tree "${DEMO_PID:-}"; }
 echo $$ > .run/dev.pid   # the Mac app uses this to stop everything (an in-app restart keeps the same process)
 trap 'stop_all; rm -f .run/dev.pid; exit 0' INT TERM
 trap 'stop_all; rm -f .run/dev.pid' EXIT
@@ -100,6 +107,9 @@ trap 'stop_all; rm -f .run/dev.pid' EXIT
 rm -f .restart-requested
 (cd backend && PT_SUPERVISED=1 exec uvicorn app.main:app --host 127.0.0.1 --port $API_PORT) &
 API_PID=$!
+# The demo copy: PT_DEMO=1 gives it its own databases and no keys, and routes all its network requests to made-up data.
+(cd backend && PT_DEMO=1 exec uvicorn app.main:app --host 127.0.0.1 --port $DEMO_PORT --log-level warning) &
+DEMO_PID=$!
 sleep 2
 if ! kill -0 "$API_PID" 2>/dev/null; then echo "The backend didn't start (see the error above)."; exit 1; fi
 if [ "$PROD" = 1 ]; then

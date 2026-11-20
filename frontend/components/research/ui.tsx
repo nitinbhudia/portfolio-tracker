@@ -1,5 +1,6 @@
 "use client";
 
+import { useDemoChosen as useDemo } from "@/components/DemoSwitch";
 import type { ApiError, Classification, Provenance } from "@/lib/research/api";
 import { fmtTimestamp } from "@/lib/research/format";
 
@@ -58,7 +59,16 @@ export function SyntheticTag() {
   return <span className="rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">Synthetic</span>;
 }
 
+/** The tag for prices from a data provider (Tiingo, EODHD): Real, or Demo while demo mode is on. */
+export function RealTag({ small = false }: { small?: boolean }) {
+  const demo = useDemo();
+  const cls = `rounded ${small ? "px-1" : "px-1.5 py-0.5 tracking-wider"} text-[10px] font-bold uppercase`;
+  return demo ? <span className={`${cls} bg-amber-500 text-slate-950`} title="Made-up prices (demo mode)">Demo</span>
+    : <span className={`${cls} bg-emerald-700 text-white`}>Real</span>;
+}
+
 export function ProvenanceBadge({ p, compact = false }: { p: Provenance | null | undefined; compact?: boolean }) {
+  const demo = useDemo();
   if (!p) return null;
   const delayed =
     p.data_type === "end_of_day_broker_marks" ? "end-of-day broker prices"
@@ -67,9 +77,9 @@ export function ProvenanceBadge({ p, compact = false }: { p: Provenance | null |
   return (
     <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 dark:text-slate-400 ${compact ? "" : "mt-1"}`}>
       {p.is_synthetic && <SyntheticTag />}
-      {p.is_synthetic === false && <span className="rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">Real</span>}
+      {p.is_synthetic === false && <RealTag />}
       <span>
-        Source: <b className="font-medium text-slate-700 dark:text-slate-300">{p.source ?? "none"}</b>
+        Source: <b className="font-medium text-slate-700 dark:text-slate-300">{demo && p.is_synthetic === false ? "demo market (made-up)" : p.source ?? "none"}</b>
       </span>
       <span>As of: {fmtTimestamp(p.as_of)}</span>
       {p.oldest_as_of && p.oldest_as_of !== p.as_of && <span>(oldest: {fmtTimestamp(p.oldest_as_of)})</span>}

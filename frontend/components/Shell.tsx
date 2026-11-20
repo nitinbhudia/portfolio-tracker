@@ -6,6 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 
 import { apiFetch, type Status, STATUS_EVENT } from "@/lib/api";
 
+import { DemoBanner, DemoSwitch, demoChosen } from "./DemoSwitch";
 import { Favorites } from "./Favorites";
 import { RangeProvider } from "./RangePicker";
 
@@ -48,6 +49,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [updateAvailable, setUpdateAvailable] = useState(false);
 
   useEffect(() => {  // once per browser session: is a newer version on GitHub? (the Updates page refreshes it)
+    if (demoChosen()) return; // updates are switched off in demo mode
     try {
       const known = sessionStorage.getItem("pt-update");
       if (known !== null) { setUpdateAvailable(known === "1"); return; }
@@ -89,18 +91,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <RangeProvider>
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
-        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2 2xl:gap-4">
           <Link href="/" className="whitespace-nowrap font-semibold tracking-tight">Portfolio Tracker</Link>
           <nav className="hidden gap-0.5 xl:flex">
             {NAV.map((n) => (
               <Link key={n.href} href={n.href}
-                className={`whitespace-nowrap rounded px-2 py-1.5 text-sm ${active(n.href) ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
+                className={`whitespace-nowrap rounded px-1.5 py-1.5 text-sm 2xl:px-2 ${active(n.href) ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
                 {n.label}{badge(n.href)}
               </Link>
             ))}
             <div className="relative">
               <button aria-expanded={dataOpen} aria-haspopup="true" onClick={() => setDataOpen(!dataOpen)}
-                className={`whitespace-nowrap rounded px-2 py-1.5 text-sm ${DATA.some((n) => active(n.href)) ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
+                className={`whitespace-nowrap rounded px-1.5 py-1.5 text-sm 2xl:px-2 ${DATA.some((n) => active(n.href)) ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
                 Data{updateAvailable && <span className="ml-1 inline-block h-2 w-2 rounded-full bg-emerald-600 align-middle" aria-label="An update is available" />}{pending > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${pending} rows to review`}>{pending}</span>} ▾
               </button>
               {dataOpen && (
@@ -114,9 +116,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </nav>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <DemoSwitch />
             <button aria-label="Toggle dark mode" onClick={() => { localStorage.setItem("theme", dark ? "light" : "dark"); setDark(!dark); }}
-              className="rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-700">{dark ? "☀ Light" : "☾ Dark"}</button>
+              className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-700"><span aria-hidden>{dark ? "☀" : "☾"}</span><span className="hidden 2xl:inline">{dark ? " Light" : " Dark"}</span></button>
             <button aria-label="Menu" onClick={() => setOpen(!open)} className="rounded border border-slate-300 px-2 py-1 text-xs xl:hidden dark:border-slate-700">☰</button>
           </div>
         </div>
@@ -127,6 +130,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             {DATA.map((n) => <Link key={n.href} href={n.href} className={`rounded px-2 py-2 text-sm ${active(n.href) ? "font-semibold" : ""}`}>{n.label}{badge(n.href)}</Link>)}
           </nav>
         )}
+        <DemoBanner />
       </header>
       <div className="flex">
         <Suspense fallback={null}><Favorites /></Suspense>

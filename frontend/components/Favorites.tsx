@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { useDemoChosen } from "@/components/DemoSwitch";
 import { apiFetch, jsonInit } from "@/lib/api";
 
 type Fav = { href: string; label: string };
@@ -69,6 +70,7 @@ export function Favorites() {
   const [open, setOpen] = useState(true);
   const [drawer, setDrawer] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const demo = useDemoChosen(); // the demo bar makes the header taller
 
   useEffect(() => {
     apiFetch<FavResp>("/api/favorites").then((r) => setItems(r.items)).catch(() => setItems([]));
@@ -108,7 +110,7 @@ export function Favorites() {
   return (
     <>
       {/* wide screens: a panel beside the page, collapsible to a slim rail */}
-      <aside aria-label="Shortcuts" className={`sticky top-[59px] hidden h-[calc(100vh-59px)] shrink-0 overflow-y-auto border-r border-slate-200 bg-white/60 lg:block dark:border-slate-800 dark:bg-slate-900/40 ${open ? "w-56 p-3" : "w-10 py-3"}`}>
+      <aside aria-label="Shortcuts" className={`sticky hidden shrink-0 ${demo ? "top-[95px] h-[calc(100vh-95px)]" : "top-[59px] h-[calc(100vh-59px)]"} overflow-y-auto border-r border-slate-200 bg-white/60 lg:block dark:border-slate-800 dark:bg-slate-900/40 ${open ? "w-56 p-3" : "w-10 py-3"}`}>
         {open ? (
           <>
             <div className="mb-2 flex items-center justify-between">

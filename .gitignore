@@ -15,6 +15,7 @@ data/
 !backend/tests_research/fixtures/**
 # backups, update and restart bookkeeping (made by the app on your computer)
 backups/
+backend/demo-data/
 .run/
 version.json
 .installed-files.json

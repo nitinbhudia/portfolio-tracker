@@ -8,8 +8,12 @@ from pathlib import Path
 from sqlalchemy import JSON, Boolean, Date, DateTime, Float, Integer, String, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
+from app import demo as _demo
+
 BACKEND_DIR = Path(__file__).resolve().parents[2]
-DATABASE_URL = os.environ.get("PT_DATABASE_URL", f"sqlite:///{BACKEND_DIR / 'portfolio.db'}")
+# Demo mode never opens your real database: it has its own file (see app/demo/__init__.py).
+DATABASE_URL = f"sqlite:///{_demo.TRACKER_DB}" if _demo.DEMO else \
+    os.environ.get("PT_DATABASE_URL", f"sqlite:///{BACKEND_DIR / 'portfolio.db'}")
 
 
 def now() -> datetime:

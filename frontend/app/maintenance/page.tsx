@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 
+import { demoChosen } from "@/components/DemoSwitch";
 import { ErrorBox, Loading, Note, Section, btn, btnPrimary } from "@/components/ui";
 import { ApiError, apiFetch, useApi } from "@/lib/api";
 import { fmtTimestamp } from "@/lib/format";
 
 type Backup = { id: string; reason: string; at: string; files: Record<string, number>; version: string | null };
-type Maint = { version: { sha: string | null; date: string | null; note?: string }; supervised: boolean; backups: Backup[]; backups_folder: string };
+type Maint = { version: { sha: string | null; date: string | null; note?: string }; supervised: boolean; backups: Backup[]; backups_folder: string | null; demo?: boolean };
 type Check = { current: Maint["version"]; latest: { sha: string; date: string }; update_available: boolean; whats_new: string[] };
 
 const REASON: Record<string, string> = { daily: "Daily (automatic)", manual: "Made by you", "before-update": "Before an update", "before-restore": "Before a restore" };
@@ -38,6 +39,7 @@ export default function MaintenancePage() {
   const [status, setStatus] = useState<string | null>(null);
 
   const check = () => {
+    if (demoChosen()) return; // switched off in demo mode
     setChkErr(null);
     apiFetch<Check>("/api/maintenance/check").then((c) => {
       setChk(c);
@@ -66,6 +68,13 @@ export default function MaintenancePage() {
   if (q.error) return <ErrorBox error={q.error} onRetry={q.reload} />;
   if (!q.data) return <Loading />;
   const d = q.data;
+  if (d.demo) return (
+    <div className="max-w-2xl space-y-4">
+      <h1 className="text-xl font-semibold">Updates &amp; backups</h1>
+      <Note tone="slate">Switched off in demo mode: updates and backups work on your real copy only, and the demo can&apos;t see or
+        restore your backups. Use <b>Reset demo data</b> in the yellow bar to start the demo afresh, or switch to Live.</Note>
+    </div>
+  );
   return (
     <div className="max-w-4xl space-y-4">
       <h1 className="text-xl font-semibold">Updates &amp; backups</h1>

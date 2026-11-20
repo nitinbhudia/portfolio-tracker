@@ -33,4 +33,14 @@ class Settings(BaseSettings):
     eodhd_daily_budget: int = 1000
 
 
-settings = Settings()
+def _make() -> Settings:
+    from app import demo
+    if not demo.DEMO:
+        return Settings()
+    # Demo mode: never read .env (your keys) and never open your real database. The "demo" keys only switch the
+    # price features on: every request is answered by app.demo.network with synthetic data, so nothing leaves.
+    return Settings(_env_file=None, database_url=f"sqlite:///{demo.RESEARCH_DB}", tiingo_api_key="demo",
+                    eodhd_api_key="demo", ibkr_flex_token=None, ibkr_flex_query_id=None)
+
+
+settings = _make()

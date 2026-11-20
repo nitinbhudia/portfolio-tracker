@@ -8,7 +8,7 @@ import { EuMarketDataPanel, FxPanel } from "@/components/research/EuMarketDataPa
 import { MarketDataPanel } from "@/components/research/MarketDataPanel";
 import { RefreshAllButton, RefreshOneButton } from "@/components/research/RefreshButtons";
 import { type Spark, Sparkline } from "@/components/research/Sparkline";
-import { ClassBadge, ErrorBox, Loading, ProvenanceBadge, Section } from "@/components/research/ui";
+import { ClassBadge, ErrorBox, Loading, ProvenanceBadge, Section, RealTag } from "@/components/research/ui";
 import { type Classification, type ListingInfo, type Provenance, useApi } from "@/lib/research/api";
 import { num, pct, ratioLabel, signClass } from "@/lib/research/format";
 
@@ -55,7 +55,7 @@ const makeColumns = (reload: () => void): Column<Row>[] => [
     render: (r) => <span className="inline-block max-w-48 truncate align-bottom text-xs text-slate-600 dark:text-slate-300" title={r.listing.name}>{r.listing.tracks ?? r.listing.name}</span> },
   { key: "data", label: "Data", type: "enum", labels: { real: "Real", synthetic: "Synthetic" }, get: (r) => r.namespace,
     render: (r) => r.namespace === "real"
-      ? <span className="rounded bg-emerald-700 px-1 text-[10px] font-bold uppercase text-white">Real</span>
+      ? <RealTag small />
       : <span className="rounded bg-violet-600 px-1 text-[10px] font-bold uppercase text-white">Synth</span> },
   { key: "type", label: "Type", type: "enum", get: (r) => r.listing.asset_class },
   { key: "exchange", label: "Exch.", type: "enum", get: (r) => r.listing.exchange },

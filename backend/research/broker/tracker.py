@@ -46,8 +46,8 @@ def snapshot_from_positions(pos: dict, tickers: dict[str, str | None], mic_for=l
             account_masked="tracker", conid=None, isin=None, symbol=ticker or p["stock"], description=p["stock"],
             asset_category="STK", listing_exchange=exch, currency=p["currency"], quantity=_d(p["shares"]), multiplier=Decimal(1),
             mark_price=_d(mark), position_value=_d(p["shares"] * mark), cost_basis_price=_d(avg),
-            cost_basis_money=_d(p["cost_local"] * scale if p.get("cost_local") is not None else None),
-            unrealised_pnl=_d(p["shares"] * mark - p["cost_local"] * scale) if p.get("cost_local") is not None else None,
+            cost_basis_money=_d(p.get("cost_local")),  # already in pounds for London stocks (only prices are in pence)
+            unrealised_pnl=_d(p["shares"] * mark - p["cost_local"]) if p.get("cost_local") is not None else None,
             fx_rate_to_base=_d(p["rate"]), report_date=date.fromisoformat(p["price_date"]) if p.get("price_date") else as_of))
         if p["currency"] != "USD":
             snap.fx_rates[(p["currency"], "USD")] = (_d(p["rate"]), date.fromisoformat(p["rate_date"]) if p.get("rate_date") else as_of)
@@ -60,7 +60,7 @@ def snapshot_from_positions(pos: dict, tickers: dict[str, str | None], mic_for=l
 
 def fingerprint(pos: dict, tickers: dict) -> str:
     key = [(p["pool"], round(p["shares"], 6), p.get("price"), tickers.get(p["stock_key"])) for p in pos["positions"]]
-    return hashlib.sha256(json.dumps([pos["as_of"], key], default=str).encode()).hexdigest()[:20]
+    return hashlib.sha256(json.dumps(["v2", pos["as_of"], key], default=str).encode()).hexdigest()[:20]  # v2: London cost fix
 
 
 def read_tracker() -> tuple[dict, dict]:

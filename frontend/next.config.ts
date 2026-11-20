@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 // The browser only talks to Next.js; /api/* is proxied to the local FastAPI backend (port 8001).
 const backend = process.env.BACKEND_URL ?? "http://127.0.0.1:8001";
+// Demo mode (made-up data) is a second backend on port 8002, chosen by the pt_mode=demo cookie (the Live/Demo switch).
+// Its rules come first; with the cookie there is no fallback to the live backend: if the demo is down, pages show errors.
+const demoBackend = process.env.DEMO_BACKEND_URL ?? "http://127.0.0.1:8002";
+const demo = [{ type: "cookie" as const, key: "pt_mode", value: "demo" }];
 
 const nextConfig: NextConfig = {
   // The Mac app runs a built copy in its own folder (scripts/dev.sh --prod), apart from the development server's .next.
@@ -9,6 +13,8 @@ const nextConfig: NextConfig = {
   experimental: { proxyTimeout: 120_000 }, // importing a large workbook and fetching ECB rates can take a while
   async rewrites() {
     return [
+      { source: "/api/:path*", has: demo, destination: `${demoBackend}/api/:path*` },
+      { source: "/research/api/:path*", has: demo, destination: `${demoBackend}/research/api/:path*` },
       { source: "/api/:path*", destination: `${backend}/api/:path*` },
       // Research (the former Fibonacci AI app) has its own API, mounted under /research in the same backend.
       { source: "/research/api/:path*", destination: `${backend}/research/api/:path*` },
