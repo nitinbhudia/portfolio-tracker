@@ -175,25 +175,31 @@ export function Lines({ dates, series: allSeries, height = 240, fmt, label, hide
 }
 
 /** Ranked horizontal bars, one hue, value at the tip. */
-export function RankedBars({ rows, fmt, max = 12 }: { rows: { label: string; value: number; pct?: number | null }[]; fmt: (v: number) => string; max?: number }) {
+export function RankedBars({ rows, fmt, max = 12, scaleMax, hideRest = false }: {
+  rows: { label: string; value: number; pct?: number | null }[]; fmt: (v: number) => string; max?: number;
+  /** Bar length relative to this value (e.g. the biggest of the unfiltered list), so filtering doesn't rescale. */
+  scaleMax?: number;
+  /** Don't print "and N more" (the caller shows its own control). */
+  hideRest?: boolean;
+}) {
   const shown = rows.slice(0, max);
   const rest = rows.slice(max);
   const all = shown;
-  const top = Math.max(...all.map((r) => r.value), 1);
+  const top = scaleMax ?? Math.max(...all.map((r) => r.value), 1);
   const restValue = rest.reduce((a, r) => a + r.value, 0);
   const restPct = rest.reduce((a, r) => a + (r.pct ?? 0), 0);
   return (
     <>
     <ul className="space-y-1.5 text-sm">
       {all.map((r) => (
-        <li key={r.label} className="grid grid-cols-[minmax(5rem,9rem)_1fr_auto] items-center gap-2" title={`${r.label}: ${fmt(r.value)}${r.pct != null ? ` (${r.pct.toFixed(1)}%)` : ""}`}>
+        <li key={r.label} className="grid grid-cols-[minmax(5rem,12rem)_1fr_auto] items-center gap-2" title={`${r.label}: ${fmt(r.value)}${r.pct != null ? ` (${r.pct.toFixed(1)}%)` : ""}`}>
           <span className="truncate text-slate-600 dark:text-slate-300">{r.label}</span>
           <span className="h-3"><span className="block h-3 rounded-r" style={{ width: `${Math.max(0.5, (r.value / top) * 100)}%`, background: "var(--viz-1)" }} /></span>
           <span className="num whitespace-nowrap text-right text-xs text-slate-700 dark:text-slate-200">{fmt(r.value)}{r.pct != null && <span className="text-slate-500"> · {r.pct.toFixed(1)}%</span>}</span>
         </li>
       ))}
     </ul>
-    {rest.length > 0 && <p className="mt-2 text-xs text-slate-500">and {rest.length} more: {fmt(restValue)} · {restPct.toFixed(1)}%</p>}
+    {rest.length > 0 && !hideRest && <p className="mt-2 text-xs text-slate-500">and {rest.length} more: {fmt(restValue)} · {restPct.toFixed(1)}%</p>}
     </>
   );
 }

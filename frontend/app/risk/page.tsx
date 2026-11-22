@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 
 import { Lines, RankedBars, Tooltip, type Tip, useWidth } from "@/components/charts";
 import { type Column, DataTable } from "@/components/DataTable";
-import { ErrorBox, Loading, Note, Section, Stat, Usd } from "@/components/ui";
+import { ErrorBox, Loading, Note, Section, Stat, Usd, input } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import { num, pct, usd } from "@/lib/format";
 
@@ -69,6 +69,38 @@ function CorrGrid({ c }: { c: Corr }) {
         <span>+1 together</span>
       </div>
     </div>
+  );
+}
+
+const TOP = 12;
+
+/** Every position by weight: the top 12 at first, "Show all" for the rest, and a search box that finds any of them
+ * (bars keep the same scale, and each keeps its rank in the whole portfolio). */
+function ConcentrationBars({ weights }: { weights: { key: string; label: string; value_usd: number; pct: number }[] }) {
+  const [all, setAll] = useState(false);
+  const [text, setText] = useState("");
+  const t = text.trim().toLowerCase();
+  const ranked = weights.map((w, i) => ({ label: `${i + 1}. ${w.label}`, name: w.label, value: w.value_usd, pct: w.pct }));
+  const rows = t ? ranked.filter((r) => r.name.toLowerCase().includes(t)) : ranked;
+  const limit = all || t ? rows.length : TOP;
+  const hidden = rows.length - Math.min(limit, rows.length);
+  const hiddenUsd = rows.slice(limit).reduce((a, r) => a + r.value, 0);
+  const hiddenPct = rows.slice(limit).reduce((a, r) => a + r.pct, 0);
+  return (
+    <>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <input type="search" aria-label="Search positions" placeholder={`Search ${weights.length} positions…`} value={text}
+          onChange={(e) => setText(e.target.value)} className={`${input} w-56 max-w-full`} />
+        {t && <span className="text-xs text-slate-500" role="status">{rows.length} of {weights.length} match
+          {rows.length > 0 && <> · {usd(rows.reduce((a, r) => a + r.value, 0))} · {pct(rows.reduce((a, r) => a + r.pct, 0), 1, false)}</>}</span>}
+      </div>
+      {rows.length === 0 ? <p className="text-sm text-slate-500">No position matches &ldquo;{text}&rdquo;.</p>
+        : <RankedBars rows={rows} fmt={(v) => usd(v)} max={limit} scaleMax={weights[0]?.value_usd} hideRest />}
+      {!t && weights.length > TOP && (
+        <button className="mt-2 text-xs underline" aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? `Show the top ${TOP} only` : `Show all ${weights.length} (${hidden} more: ${usd(hiddenUsd)} · ${pct(hiddenPct, 1, false)})`}</button>
+      )}
+    </>
   );
 }
 
@@ -155,7 +187,7 @@ export default function RiskPage() {
               {c.large.length > 0 && <p className="mb-2 text-sm">
                 {c.large.map((x, i) => <span key={x.key}>{i > 0 && ", "}<b>{x.label}</b> {pct(x.pct, 1, false)}{x.very_large && " (over " + d.thresholds.very_large_pct + "%)"}</span>)}
                 {" "}{c.large.length === 1 ? "is" : "are"} over {d.thresholds.large_pct}% of the portfolio each.</p>}
-              <RankedBars rows={c.weights.map((w) => ({ label: w.label, value: w.value_usd, pct: w.pct }))} fmt={(v) => usd(v)} max={12} />
+              <ConcentrationBars weights={c.weights} />
             </Section>
             <Section title="Sectors">
               <RankedBars rows={d.exposure.sector.map((s) => ({ label: s.label, value: s.value_usd, pct: s.pct }))} fmt={(v) => usd(v)} />
