@@ -165,6 +165,58 @@ class AssistantChat(Base):
     display: Mapped[list] = mapped_column(JSON, default=list)
 
 
+class JournalEntry(Base):
+    """Your notes on one trade (trade journal). `key` identifies the trade by what it is, not by its sheet row."""
+    __tablename__ = "journal_entries"
+    key: Mapped[str] = mapped_column(String(300), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(4))  # buy | sell
+    reasons: Mapped[list] = mapped_column(JSON, default=list)  # buy: why (tags)
+    target: Mapped[float | None] = mapped_column(Float, nullable=True)  # buy: plan, in the trade's price unit
+    stop: Mapped[float | None] = mapped_column(Float, nullable=True)
+    horizon_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1-5
+    sell_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    lesson: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(10000), nullable=True)
+    skipped: Mapped[bool] = mapped_column(Boolean, default=False)  # "nothing to write": off the to-journal list
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class JournalIdea(Base):
+    """A trade idea: a stock you're watching, its price levels (entry, target, stop, alerts) and why."""
+    __tablename__ = "journal_ideas"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    stock: Mapped[str] = mapped_column(String(200))
+    ticker: Mapped[str] = mapped_column(String(30))
+    exchange: Mapped[str] = mapped_column(String(10), default="US")  # US (Tiingo) or a European MIC
+    side: Mapped[str] = mapped_column(String(5), default="buy")  # buy | sell | watch
+    levels: Mapped[list] = mapped_column(JSON, default=list)  # [{label, kind: entry|target|stop|alert, price}]
+    near_pct: Mapped[float] = mapped_column(Float, default=3.0)
+    reasons: Mapped[list] = mapped_column(JSON, default=list)
+    confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(10000), nullable=True)
+    status: Mapped[str] = mapped_column(String(10), default="watching")  # watching | done | dropped
+    listing_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Research listing with its daily prices
+    price_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    bought_key: Mapped[str | None] = mapped_column(String(300), nullable=True)  # the buy it became (journal key)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class JournalIdeaEvent(Base):
+    """A price level of an idea that was reached (hit) or came close (near). Unseen ones show as a badge."""
+    __tablename__ = "journal_idea_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    idea_id: Mapped[int] = mapped_column(Integer, index=True)
+    label: Mapped[str] = mapped_column(String(100))
+    level: Mapped[float] = mapped_column(Float)
+    kind: Mapped[str] = mapped_column(String(5))  # near | hit
+    date: Mapped[date] = mapped_column(Date)
+    price: Mapped[float] = mapped_column(Float)
+    seen: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class StockPrice(Base):
     """Daily close of a stock: `series` is a US ticker (from Tiingo) or "csv:<pool>" (a file you uploaded)."""
     __tablename__ = "stock_prices"

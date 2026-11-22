@@ -10,7 +10,8 @@ A run does, in order, each step on its own (one failing doesn't stop the others)
 1. exchange rates (ECB) for Portfolio Tracker;
 2. Research: your holdings, Tiingo prices for everything it tracks (watchlist, holdings, sector ETFs, benchmarks), European
    prices if EODHD is set up, then alerts;
-3. Performance's daily price history for your stocks (Tiingo; open positions only once the history is complete).
+3. Performance's daily price history for your stocks (Tiingo; open positions only once the history is complete);
+4. the journal's trade ideas: price levels reached or close (shown as a badge on Journal).
 Positions and the other pages then value your stocks at the latest close (portfolio.current_prices).
 """
 from __future__ import annotations
@@ -113,13 +114,18 @@ def _history(db) -> dict:
             "remaining": r["remaining"]}
 
 
+def _ideas(db) -> dict:
+    from . import ideas as IS
+    return IS.check(db)
+
+
 def run_once(db, steps=None) -> dict:
     """One refresh, now (whatever `due` says). `steps` (name -> callable) is replaced in tests."""
     if not _running.acquire(blocking=False):
         return status(db)
     try:
         session = last_session().isoformat()
-        steps = steps or {"fx": lambda: _fx(db), "research": _research, "history": lambda: _history(db)}
+        steps = steps or {"fx": lambda: _fx(db), "research": _research, "history": lambda: _history(db), "ideas": lambda: _ideas(db)}
         results = {name: _step(fn) for name, fn in steps.items()}
         backlog = any(r.get("waiting") for r in results.values())
         failed = any(r["status"] == "failed" for r in results.values())

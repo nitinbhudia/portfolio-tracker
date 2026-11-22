@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { type Column, DataTable } from "@/components/DataTable";
@@ -42,7 +43,9 @@ export default function SalesPage() {
   const cols: Column<Sale>[] = [
     { key: "date", label: "Sold", type: "date", get: (s) => s.date },
     { key: "stock", label: "Stock", type: "text", get: (s) => s.stock,
-      render: (s) => <button className="text-left text-blue-700 underline dark:text-blue-300" onClick={() => { setOpen(s); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{s.stock}</button> },
+      render: (s) => <><button className="text-left text-blue-700 underline dark:text-blue-300" onClick={() => { setOpen(s); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{s.stock}</button>
+        <Link className="ml-1.5 text-xs" title="Trade journal: why you sold, and what happened" aria-label={`Journal entry for this ${s.stock} sale`}
+          href={`/journal?trade=${encodeURIComponent(s.id)}`}>📝</Link></> },
     { key: "shares", label: "Shares", type: "number", align: "right", get: (s) => s.shares, render: (s) => qty(s.shares) },
     { key: "price", label: "Sell price", type: "number", align: "right", get: (s) => s.price, render: (s) => num(s.price, 2) },
     { key: "ccy", label: "Ccy", type: "enum", get: (s) => s.currency },
