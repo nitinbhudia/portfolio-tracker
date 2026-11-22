@@ -119,6 +119,45 @@ The risk of what you hold today:
 Market risk needs daily prices (Data ▾ Price history) and the S&P 500 (vs Indexes). Positions without them are listed
 and left out.
 
+## Journal (top menu)
+
+One entry per trade:
+- **Buys:** why you bought (tags), a target, a stop, a time frame, confidence and notes.
+- **Sales:** why you sold, and a lesson.
+
+The app adds what the prices say:
+- **At a buy:** the distance from the 1-year high, whether the S&P 500 was above its 200-day average, and the nearest
+  Fibonacci level that day.
+- **At a sale:**
+  - the gain, and how the same money did in the S&P 500;
+  - the best and worst point while you held it;
+  - plan vs reality: sold below your stop, gave back a target you'd reached, held longer than planned.
+
+The views:
+- **To journal:** new trades from the last 90 days without notes.
+- **All trades:** every trade with its notes and outcome.
+- **What works:** win rate and average gain by buy reason, group, confidence, sell reason and holding time; gains given
+  back; your lessons.
+
+Entries stay attached when you re-upload the workbook. 📝 on Sales and Positions opens them; **Export CSV** saves
+everything.
+
+**★ Stars and grouping:**
+- ☆ next to a stock (on All trades and Ideas) stars it as one of your most interesting stocks.
+- **Starred only** shows just those.
+- **Group by** splits **All trades** by sector, stock, starred, buys/sales, buy or sell reason, sale group, currency,
+  broker, year or notes. Each group shows its trades, sales, winners and realised gain.
+- **Ideas** can be grouped by sector, starred, buy/sell/watch, reason or triggered.
+- What works adds **By sector** and **Starred vs the rest**.
+
+**Ideas:** write a trade down before you make it: the stock, its price levels (entry, target, stop, or any level, with
+one-click Fibonacci levels) and why.
+- Adding an idea downloads the stock's prices in Research.
+- After every price refresh, each level is checked. It's marked **near** when a close comes within 3% (adjustable),
+  and **hit** when a day's range touches it.
+- New ones show as a badge on Journal.
+- **I bought it** copies the idea's plan into that buy's journal entry, so plan vs reality works.
+
 ## Demo mode (show the app without your data)
 
 The **Live | Demo** switch at the top right swaps the whole app to a made-up portfolio: twenty invented companies

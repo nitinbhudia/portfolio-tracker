@@ -31,6 +31,8 @@ from app.services import assistant as AS  # noqa: E402
 from app.services import portfolio as P  # noqa: E402
 from app.services import whatif as WS  # noqa: E402
 from app.services import risk as RS  # noqa: E402
+from app.services import journal as JS  # noqa: E402
+from app.services import ideas as IS  # noqa: E402
 from app.demo import service as DS  # noqa: E402
 
 MAX_UPLOAD = 50 * 1024 * 1024
@@ -668,6 +670,134 @@ def auto_refresh_run(db: Session = Depends(get_db)):
 @app.get("/api/risk")
 def risk(window: str = "1y", db: Session = Depends(get_db)):
     return RS.view(db, window)
+
+
+# ---------------------------------------------------------------- trade journal
+
+class JournalIn(BaseModel):
+    reasons: list[str] | None = None
+    target: float | None = None
+    stop: float | None = None
+    horizon_days: int | None = None
+    confidence: int | None = None
+    sell_reason: str | None = None
+    lesson: str | None = None
+    notes: str | None = None
+    skipped: bool = False
+
+
+class JournalSkipIn(BaseModel):
+    keys: list[str] = []
+    older: bool = False
+
+
+class JournalTagsIn(BaseModel):
+    reasons: list[str] | None = None
+    sell_reasons: list[str] | None = None
+
+
+@app.get("/api/journal")
+def journal(db: Session = Depends(get_db)):
+    return JS.view(db)
+
+
+@app.get("/api/journal/stats")
+def journal_stats(db: Session = Depends(get_db)):
+    return JS.stats(db)
+
+
+@app.get("/api/journal/export.csv")
+def journal_export(db: Session = Depends(get_db)):
+    return Response(JS.export_csv(db), media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="trade-journal.csv"'})
+
+
+@app.get("/api/journal/entry")
+def journal_entry(key: str, db: Session = Depends(get_db)):
+    return JS.detail(db, key)
+
+
+@app.put("/api/journal/entry")
+def journal_save(key: str, body: JournalIn, db: Session = Depends(get_db)):
+    return JS.save(db, key, body.model_dump())
+
+
+@app.post("/api/journal/skip")
+def journal_skip(body: JournalSkipIn, db: Session = Depends(get_db)):
+    return JS.skip(db, body.keys, body.older)
+
+
+@app.put("/api/journal/tags")
+def journal_tags(body: JournalTagsIn, db: Session = Depends(get_db)):
+    return JS.set_tags(db, body.reasons, body.sell_reasons)
+
+
+class StarIn(BaseModel):
+    key: str
+    starred: bool = True
+
+
+@app.put("/api/journal/star")
+def journal_star(body: StarIn, db: Session = Depends(get_db)):
+    return JS.set_star(db, body.key, body.starred)
+
+
+class IdeaIn(BaseModel):
+    sector: str | None = None
+    stock: str | None = None
+    ticker: str | None = None
+    exchange: str | None = None
+    side: str | None = None
+    levels: list[dict] | None = None
+    near_pct: float | None = None
+    reasons: list[str] | None = None
+    confidence: int | None = None
+    notes: str | None = None
+    status: str | None = None
+    retry_prices: bool = False
+
+
+class IdeaBoughtIn(BaseModel):
+    key: str
+
+
+@app.get("/api/journal/ideas")
+def ideas(db: Session = Depends(get_db)):
+    return IS.view(db)
+
+
+@app.get("/api/journal/ideas/unseen")
+def ideas_unseen(db: Session = Depends(get_db)):
+    return {"unseen": IS.unseen(db)}
+
+
+@app.post("/api/journal/ideas/seen")
+def ideas_seen(db: Session = Depends(get_db)):
+    return IS.mark_seen(db)
+
+
+@app.post("/api/journal/ideas")
+def idea_create(body: IdeaIn, db: Session = Depends(get_db)):
+    return IS.create(db, body.model_dump(exclude_unset=True))
+
+
+@app.put("/api/journal/ideas/{idea_id}")
+def idea_update(idea_id: int, body: IdeaIn, db: Session = Depends(get_db)):
+    return IS.update(db, idea_id, body.model_dump(exclude_unset=True))
+
+
+@app.delete("/api/journal/ideas/{idea_id}")
+def idea_delete(idea_id: int, db: Session = Depends(get_db)):
+    return IS.remove(db, idea_id)
+
+
+@app.get("/api/journal/ideas/{idea_id}/buys")
+def idea_buys(idea_id: int, db: Session = Depends(get_db)):
+    return {"buys": IS.candidates(db, idea_id)}
+
+
+@app.post("/api/journal/ideas/{idea_id}/bought")
+def idea_bought(idea_id: int, body: IdeaBoughtIn, db: Session = Depends(get_db)):
+    return IS.bought(db, idea_id, body.key)
 
 
 # ---------------------------------------------------------------- demo mode

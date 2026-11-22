@@ -217,12 +217,44 @@ def build_tracker(today: date | None = None) -> dict:
         BMS.refresh(db)
         P._invalidate()
         HS._invalidate()
+        _journal(db)
         db.merge(m.Setting(key="demo", value={"built_at": datetime.now(timezone.utc).isoformat(), "as_of": end.isoformat()}))
         db.commit()
         n_open = sum(1 for x in lots if not x.sale)
         return {"lots": len(lots), "sales": len(lots) - n_open, "imports": len(list(db.scalars(select(m.Import))))}
     finally:
         db.close()
+
+
+NOTES_BUY = {"Fibonacci bounce": "Pulled back to the 61.8% level and held it for three days.",
+             "Breakout": "Closed above the range high on rising volume.",
+             "Dip buy": "Down sharply after the market sell-off; nothing changed in the business.",
+             "Long-term hold": "Quality compounder, adding on weakness.",
+             "Momentum": "Strongest name in its sector this quarter."}
+SELL = [("Hit target", None), ("Took profit early", "Sold half way to the target; next time scale out instead."),
+        ("Hit stop", "The stop did its job."), ("Nervous / market fall", "Sold on a red day near the low: write the plan down first."),
+        ("Idea no longer holds", None)]
+
+
+def _journal(db) -> None:
+    """Made-up journal entries on about half the trades, so the Journal pages have something to show."""
+    from app.services import journal as JS
+    rows = JS.view(db)["rows"]
+    rng = random.Random("journal-demo-v1")
+    for r in rows:
+        if r["date"] >= (date.today() - timedelta(days=JS.INBOX_DAYS)).isoformat() or rng.random() < 0.45:
+            continue  # recent trades stay on the To journal list; others stay unwritten
+        if r["kind"] == "buy":
+            reason = rng.choice(list(NOTES_BUY))
+            p = r["price"]
+            JS.save(db, r["key"], {"reasons": [reason] + ([rng.choice(["Alpha pick", "Earnings"])] if rng.random() < 0.25 else []),
+                                   "target": round(p * rng.uniform(1.15, 1.6), 2), "stop": round(p * rng.uniform(0.82, 0.93), 2),
+                                   "horizon_days": rng.choice([30, 60, 90, 180, 365]), "confidence": rng.randint(2, 5),
+                                   "notes": NOTES_BUY[reason] + " (made-up)"})
+        else:
+            why, lesson = rng.choice(SELL)
+            JS.save(db, r["key"], {"sell_reason": why, "lesson": lesson, "notes": "(made-up)"})
+    JS.skip(db, older=True)
 
 
 def build_research() -> dict:
@@ -263,6 +295,46 @@ def build_research() -> dict:
     return {"listings": listings, "watchlist": watch}
 
 
+def build_ideas() -> int:
+    """Made-up trade ideas: one close to a level, one that hit its entry last month, one new stock, one dropped."""
+    from app.db import models as m
+    from app.services import ideas as IS
+    db = m.SessionLocal()
+    try:
+        def make(ticker, stock, side, levels, reasons, notes, ago=0, status=None, conf=3):
+            d = IS.create(db, {"ticker": ticker, "stock": stock, "side": side, "levels": levels, "reasons": reasons,
+                               "notes": notes + " (made-up)", "confidence": conf})
+            i = db.get(m.JournalIdea, d["id"])
+            if ago:
+                i.created_at = datetime.now(timezone.utc) - timedelta(days=ago)
+            if status:
+                i.status = status
+            db.commit()
+        last = lambda t: market.bars(t)[-1]["close"]  # noqa: E731
+        q = last("QLTS")
+        make("QLTS", "Quantum Lattice Systems", "buy",
+             [{"label": "Watch: back near support", "kind": "alert", "price": round(q * 0.985, 2)},
+              {"label": "Entry: 61.8% Fibonacci", "kind": "entry", "price": round(q * 0.9, 2)},
+              {"label": "Stop", "kind": "stop", "price": round(q * 0.78, 2)}, {"label": "Target", "kind": "target", "price": round(q * 1.35, 2)}],
+             ["Fibonacci bounce"], "Sold too early last time; buy back on a pullback to the 61.8% level.", conf=4)
+        rows = market.bars("AQMD", date.today() - timedelta(days=30))
+        lo = min(r["low"] for r in rows[5:])
+        make("AQMD", "Aquila Medical Devices", "buy",
+             [{"label": "Entry", "kind": "entry", "price": round(lo * 1.01, 2)}, {"label": "Stop", "kind": "stop", "price": round(lo * 0.88, 2)},
+              {"label": "Target", "kind": "target", "price": round(lo * 1.4, 2)}], ["Dip buy"], "Oversold after the trial news.", ago=30)
+        k = last("KSTR")
+        make("KSTR", "Kestrel Aerospace", "watch",
+             [{"label": "Breakout above the range", "kind": "alert", "price": round(k * 1.08, 2)},
+              {"label": "Back to the 200-day average", "kind": "alert", "price": round(k * 0.9, 2)}],
+             ["Breakout"], "New name on the radar; wait for a breakout or a pullback.", conf=2)
+        make("UBRT", "Urbanrise Retail", "buy", [{"label": "Entry", "kind": "entry", "price": round(last("UBRT") * 0.8, 2)}],
+             ["Dip buy"], "Dropped: the story changed.", status="dropped", conf=2)
+        IS.check(db)
+        return len(IS.view(db, run_check=False)["ideas"])
+    finally:
+        db.close()
+
+
 def build(today: date | None = None) -> dict:
     if not demo.DEMO:
         raise SystemExit("app.demo.build only runs in demo mode (PT_DEMO=1): it must never touch your real data.")
@@ -275,6 +347,7 @@ def build(today: date | None = None) -> dict:
         if p.exists():
             p.unlink()
     out = {"tracker": build_tracker(today), "research": build_research()}
+    out["ideas"] = build_ideas()
     return out
 
 

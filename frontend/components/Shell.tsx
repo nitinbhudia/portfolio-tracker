@@ -22,6 +22,7 @@ const NAV = [
   { href: "/performance", label: "Performance" },
   { href: "/explore", label: "Explore" },
   { href: "/risk", label: "Risk" },
+  { href: "/journal", label: "Journal" },
   { href: "/whatif", label: "What-if" },
   { href: "/ask", label: "Ask" },
   { href: "/research", label: "Research" },
@@ -48,6 +49,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   // null = not known yet; pages only load (and ask the backend for results) once an import exists
   const [imported, setImported] = useState<boolean | null>(null);
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [ideasNew, setIdeasNew] = useState(0);
 
   useEffect(() => {  // once per browser session: is a newer version on GitHub? (the Updates page refreshes it)
     if (demoChosen()) return; // updates are switched off in demo mode
@@ -65,9 +67,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const load = () => apiFetch<Status>("/api/status")
       .then((s) => { setPending(s.imported ? s.review_pending : 0); setImported(s.imported); })
       .catch(() => setImported(true)); // backend unreachable: let the page show its own error
+    const ideas = () => apiFetch<{ unseen: number }>("/api/journal/ideas/unseen").then((r) => setIdeasNew(r.unseen)).catch(() => {});
     load();
+    ideas();
+    window.addEventListener(STATUS_EVENT, ideas);
     window.addEventListener(STATUS_EVENT, load);
-    return () => window.removeEventListener(STATUS_EVENT, load);
+    return () => { window.removeEventListener(STATUS_EVENT, load); window.removeEventListener(STATUS_EVENT, ideas); };
   }, [path]);
 
   useEffect(() => {
@@ -86,6 +91,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   const badge = (href: string) => (href === "/review" && pending > 0 && (
     <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${pending} rows to review`}>{pending}</span>
+  )) || (href === "/journal" && ideasNew > 0 && (
+    <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${ideasNew} idea price levels reached or close`}>{ideasNew}</span>
   )) || (href === "/maintenance" && updateAvailable && (
     <span className="ml-1 rounded-full bg-emerald-600 px-1.5 text-[10px] font-bold text-white" aria-label="An update is available">new</span>
   ));
