@@ -101,6 +101,24 @@ Dock like any other app:
 
 The Terminal starter (`Start Portfolio Tracker`) still works; don't run both at once (they use the same ports).
 
+## Risk (top menu)
+
+The risk of what you hold today:
+- **Concentration:** your largest position, the top 5 and top 10, and the "effective number of positions". Positions over
+  10% (and 20%) of the portfolio are called out.
+- **Exposure:** your money by sector, currency and broker.
+- **Market risk:** today's positions replayed over the last 6 months, 1 year or 3 years of daily USD prices. It shows:
+  - yearly volatility;
+  - the deepest fall;
+  - the loss on a bad day (1 day in 20, historical VaR 95%);
+  - beta and correlation to the S&P 500;
+  - what a 10/20/30% market fall would roughly do;
+  - each stock's share of the risk;
+  - how your biggest positions move together.
+
+Market risk needs daily prices (Data ▾ Price history) and the S&P 500 (vs Indexes). Positions without them are listed
+and left out.
+
 ## Demo mode (show the app without your data)
 
 The **Live | Demo** switch at the top right swaps the whole app to a made-up portfolio: twenty invented companies

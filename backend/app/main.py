@@ -30,6 +30,7 @@ from app.services import history as HS  # noqa: E402
 from app.services import assistant as AS  # noqa: E402
 from app.services import portfolio as P  # noqa: E402
 from app.services import whatif as WS  # noqa: E402
+from app.services import risk as RS  # noqa: E402
 from app.demo import service as DS  # noqa: E402
 
 MAX_UPLOAD = 50 * 1024 * 1024
@@ -660,6 +661,13 @@ def auto_refresh_set(body: AutoRefreshIn, db: Session = Depends(get_db)):
 def auto_refresh_run(db: Session = Depends(get_db)):
     AR.run_in_background()
     return {**AR.status(db), "running": True}
+
+
+# ---------------------------------------------------------------- risk dashboard
+
+@app.get("/api/risk")
+def risk(window: str = "1y", db: Session = Depends(get_db)):
+    return RS.view(db, window)
 
 
 # ---------------------------------------------------------------- demo mode

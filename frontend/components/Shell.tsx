@@ -21,6 +21,7 @@ const NAV = [
   { href: "/indexes", label: "vs Indexes" },
   { href: "/performance", label: "Performance" },
   { href: "/explore", label: "Explore" },
+  { href: "/risk", label: "Risk" },
   { href: "/whatif", label: "What-if" },
   { href: "/ask", label: "Ask" },
   { href: "/research", label: "Research" },
@@ -92,7 +93,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <RangeProvider>
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2 2xl:gap-4">
-          <Link href="/" className="whitespace-nowrap font-semibold tracking-tight">Portfolio Tracker</Link>
+          <Link href="/" className="whitespace-nowrap font-semibold tracking-tight xl:hidden 2xl:inline">Portfolio Tracker</Link>
           <nav className="hidden gap-0.5 xl:flex">
             {NAV.map((n) => (
               <Link key={n.href} href={n.href}
