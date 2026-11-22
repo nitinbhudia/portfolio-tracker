@@ -731,7 +731,18 @@ def journal_tags(body: JournalTagsIn, db: Session = Depends(get_db)):
     return JS.set_tags(db, body.reasons, body.sell_reasons)
 
 
+class StarIn(BaseModel):
+    key: str
+    starred: bool = True
+
+
+@app.put("/api/journal/star")
+def journal_star(body: StarIn, db: Session = Depends(get_db)):
+    return JS.set_star(db, body.key, body.starred)
+
+
 class IdeaIn(BaseModel):
+    sector: str | None = None
     stock: str | None = None
     ticker: str | None = None
     exchange: str | None = None

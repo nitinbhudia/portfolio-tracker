@@ -142,6 +142,14 @@ The views:
 Entries stay attached when you re-upload the workbook. 📝 on Sales and Positions opens them; **Export CSV** saves
 everything.
 
+**★ Stars and grouping:**
+- ☆ next to a stock (on All trades and Ideas) stars it as one of your most interesting stocks.
+- **Starred only** shows just those.
+- **Group by** splits **All trades** by sector, stock, starred, buys/sales, buy or sell reason, sale group, currency,
+  broker, year or notes. Each group shows its trades, sales, winners and realised gain.
+- **Ideas** can be grouped by sector, starred, buy/sell/watch, reason or triggered.
+- What works adds **By sector** and **Starred vs the rest**.
+
 **Ideas:** write a trade down before you make it: the stock, its price levels (entry, target, stop, or any level, with
 one-click Fibonacci levels) and why.
 - Adding an idea downloads the stock's prices in Research.

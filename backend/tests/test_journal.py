@@ -122,3 +122,23 @@ def test_ideas_api(client, monkeypatch):  # noqa: F811
     e = client.get("/api/journal/entry", params={"key": buy["key"]}).json()["entry"]
     assert e["reasons"] == ["Breakout"] and e["target"] == 99 and "From idea of" in e["notes"]
     assert client.delete(f"/api/journal/ideas/{i['id']}").json()["ideas"] == []
+
+
+def test_stars_and_sectors(client, monkeypatch):  # noqa: F811
+    from app.services import ideas as IS
+    monkeypatch.setattr(IS, "_track", lambda t, ex: (None, "no prices in tests"))
+    assert upload(client).status_code == 200
+    row = client.get("/api/journal").json()["rows"][0]
+    assert row["starred"] is False and row["sector"] is None
+    assert client.put("/api/sectors/" + row["stock_key"], json={"sector": "Energy"}).status_code == 200
+    assert client.put("/api/journal/star", json={"key": row["stock_key"], "starred": True}).json()["starred"] == [row["stock_key"]]
+    rows = [r for r in client.get("/api/journal").json()["rows"] if r["stock_key"] == row["stock_key"]]
+    assert all(r["starred"] and r["sector"] == "Energy" for r in rows)
+    st = client.get("/api/journal/stats").json()
+    assert {x["label"] for x in st["by_starred"]} <= {"★ Starred stocks", "Other stocks"} and st["by_sector"]
+    i = client.post("/api/journal/ideas", json={"ticker": "NEWCO", "stock": "New Co", "sector": "Energy"}).json()
+    assert i["star_key"] == "ticker:NEWCO" and i["sector"] == "Energy" and i["starred"] is False
+    client.put("/api/journal/star", json={"key": i["star_key"], "starred": True})
+    assert client.get("/api/journal/ideas").json()["ideas"][0]["starred"] is True
+    assert client.put(f"/api/journal/ideas/{i['id']}", json={"sector": "Nonsense"}).status_code == 400
+    assert client.put("/api/journal/star", json={"key": " ", "starred": True}).status_code == 400

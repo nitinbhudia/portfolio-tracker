@@ -7,23 +7,35 @@ import { Loading, Section, btn, btnPrimary, input } from "@/components/ui";
 import { ApiError, apiFetch, jsonInit, notifyStatus, useApi } from "@/lib/api";
 import { num, pct } from "@/lib/format";
 
+import { GroupControls, type GroupOpt, Star, groupRows, useGrouping } from "./grouping";
+
 type Level = { label: string; kind: "entry" | "target" | "stop" | "alert"; price: number; distance_pct?: number | null };
 type Event = { id: number; label: string; level: number; kind: "near" | "hit"; date: string; price: number; seen: boolean };
 export type Idea = {
   id: number; stock: string; ticker: string; exchange: string; side: "buy" | "sell" | "watch"; near_pct: number; levels: Level[];
   reasons: string[]; confidence: number | null; notes: string | null; status: "watching" | "done" | "dropped"; listing_id: number | null;
   price_error: string | null; bought_key: string | null; created_at: string; last: { date: string; close: number } | null; events: Event[];
+  star_key: string; starred: boolean; sector: string | null; own_sector: string | null; stock_key: string | null;
 };
-type IdeasResp = { ideas: Idea[]; unseen: number; kinds: string[]; sides: string[]; exchanges: string[]; tags: { reasons: string[] } };
+type IdeasResp = { ideas: Idea[]; unseen: number; kinds: string[]; sides: string[]; exchanges: string[]; tags: { reasons: string[] }; sectors: string[] };
+
+const SIDE_LABEL: Record<string, string> = { buy: "Buy ideas", sell: "Sell / trim ideas", watch: "Just watching" };
+const IDEA_GROUPS: GroupOpt<Idea>[] = [
+  { key: "sector", label: "sector", of: (i) => [i.sector ?? "No sector set"] },
+  { key: "starred", label: "starred or not", of: (i) => [i.starred ? "★ Starred" : "Not starred"] },
+  { key: "side", label: "buy / sell / watch", of: (i) => [SIDE_LABEL[i.side]] },
+  { key: "reason", label: "reason", of: (i) => (i.reasons.length ? i.reasons : ["(no reason written)"]) },
+  { key: "triggered", label: "triggered or not", of: (i) => [i.events.some((e) => e.kind === "hit") ? "A level was hit" : i.events.length ? "Near a level" : "Waiting"] },
+];
 type Buy = { key: string; date: string; stock: string; shares: number; price: number };
 type FibLevel = { ratio: number; kind: string; price: number };
 
 const KIND_LABEL: Record<string, string> = { entry: "Entry", target: "Target", stop: "Stop", alert: "Alert" };
-const blank = { ticker: "", exchange: "US", stock: "", side: "buy" as Idea["side"], near_pct: 3, levels: [{ label: "Entry", kind: "entry", price: 0 }] as Level[],
+const blank = { ticker: "", exchange: "US", stock: "", sector: "", side: "buy" as Idea["side"], near_pct: 3, levels: [{ label: "Entry", kind: "entry", price: 0 }] as Level[],
   reasons: [] as string[], confidence: null as number | null, notes: "" };
 
 function IdeaForm({ idea, opts, onDone, onCancel }: { idea?: Idea; opts: IdeasResp; onDone: () => void; onCancel: () => void }) {
-  const [f, setF] = useState(() => idea ? { ticker: idea.ticker, exchange: idea.exchange, stock: idea.stock, side: idea.side, near_pct: idea.near_pct,
+  const [f, setF] = useState(() => idea ? { ticker: idea.ticker, exchange: idea.exchange, stock: idea.stock, sector: idea.own_sector ?? "", side: idea.side, near_pct: idea.near_pct,
     levels: idea.levels.map(({ label, kind, price }) => ({ label, kind, price })), reasons: idea.reasons, confidence: idea.confidence, notes: idea.notes ?? "" } : blank);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,6 +68,9 @@ function IdeaForm({ idea, opts, onDone, onCancel }: { idea?: Idea; opts: IdeasRe
         <label className="flex flex-col gap-1 text-xs">Exchange<select disabled={!!idea} className={input} value={f.exchange} onChange={(e) => setF({ ...f, exchange: e.target.value })}>
           {opts.exchanges.map((x) => <option key={x} value={x}>{x === "US" ? "US" : x}</option>)}</select></label>
         <label className="flex flex-col gap-1 text-xs">Name<input className={`${input} w-48`} value={f.stock} onChange={(e) => setF({ ...f, stock: e.target.value })} placeholder="PayPal" /></label>
+        <label className="flex flex-col gap-1 text-xs">Sector<select className={input} value={f.sector} onChange={(e) => setF({ ...f, sector: e.target.value })}>
+          <option value="">{idea?.sector && !idea.own_sector ? `${idea.sector} (from your stock)` : "—"}</option>
+          {opts.sectors.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
         <label className="flex flex-col gap-1 text-xs">Idea<select className={input} value={f.side} onChange={(e) => setF({ ...f, side: e.target.value as Idea["side"] })}>
           <option value="buy">Buy</option><option value="sell">Sell / trim</option><option value="watch">Just watch</option></select></label>
         <label className="flex flex-col gap-1 text-xs" title="A level counts as near when a day's close is within this % of it">Near = within
@@ -133,6 +148,7 @@ export function Ideas({ onOpenTrade }: { onOpenTrade: (key: string) => void }) {
   const [editing, setEditing] = useState<number | "new" | null>(null);
   const [bought, setBought] = useState<number | null>(null);
   const [showClosed, setShowClosed] = useState(false);
+  const grouping = useGrouping("journal-ideas");
   const fresh = useRef<Set<number> | null>(null);
   useEffect(() => {  // remember what was new when the tab opened, then clear the menu badge
     if (!q.data || fresh.current) return;
@@ -142,14 +158,17 @@ export function Ideas({ onOpenTrade }: { onOpenTrade: (key: string) => void }) {
   if (!q.data) return <Loading />;
   const d = q.data;
   const isNew = (e: Event) => fresh.current?.has(e.id) ?? !e.seen;
-  const open = d.ideas.filter((i) => i.status === "watching");
-  const closed = d.ideas.filter((i) => i.status !== "watching");
+  const shown = d.ideas.filter((i) => !grouping.starredOnly || i.starred);
+  const open = shown.filter((i) => i.status === "watching");
+  const closed = shown.filter((i) => i.status !== "watching");
+  const gopt = IDEA_GROUPS.find((g) => g.key === grouping.group);
   const setStatus = async (i: Idea, status: Idea["status"]) => { await apiFetch(`/api/journal/ideas/${i.id}`, jsonInit("PUT", { status })); q.reload(); };
   const card = (i: Idea) => (
     <li key={i.id} className="card space-y-2">
       <div className="flex flex-wrap items-baseline gap-2">
         <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${i.side === "buy" ? "bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200" : i.side === "sell" ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200" : "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100"}`}>{i.side}</span>
-        <b>{i.stock}</b><span className="text-sm text-slate-500">{i.ticker}{i.exchange !== "US" && ` · ${i.exchange}`}</span>
+        <Star starKey={i.star_key} on={i.starred} label={i.stock} onChange={q.reload} />
+        <b>{i.stock}</b><span className="text-sm text-slate-500">{i.ticker}{i.exchange !== "US" && ` · ${i.exchange}`}{i.sector && ` · ${i.sector}`}</span>
         {i.last && <span className="num text-sm">{num(i.last.close)} <span className="text-xs text-slate-500">({i.last.date})</span></span>}
         {i.status !== "watching" && <span className="text-xs text-slate-500">{i.status === "done" ? "carried out" : "dropped"}</span>}
         <span className="ml-auto flex flex-wrap gap-2 text-xs">
@@ -193,7 +212,14 @@ export function Ideas({ onOpenTrade }: { onOpenTrade: (key: string) => void }) {
           or any level to watch) and why. After every price refresh the app checks each level and flags it when a close comes <b>near</b> it or the day&apos;s
           range <b>hits</b> it; new ones show as a badge on Journal. When you buy, <b>I bought it</b> copies the plan into that buy&apos;s journal entry.</p>
         {editing === "new" && <IdeaForm opts={d} onDone={() => { setEditing(null); q.reload(); }} onCancel={() => setEditing(null)} />}
-        {open.length === 0 && editing !== "new" ? <p className="text-sm text-slate-500">No ideas yet.</p> : <ul className="mt-3 space-y-3">{open.map(card)}</ul>}
+        <GroupControls opts={IDEA_GROUPS} group={grouping.group} setGroup={grouping.setGroup} starredOnly={grouping.starredOnly} setStarredOnly={grouping.setStarredOnly} />
+        {open.length === 0 && editing !== "new" ? <p className="text-sm text-slate-500">{grouping.starredOnly ? "No starred ideas: press ☆ on an idea to star it." : "No ideas yet."}</p>
+          : !gopt ? <ul className="mt-3 space-y-3">{open.map(card)}</ul> : (
+            <div className="mt-3 space-y-4">{groupRows(open, gopt).map((g) => (
+              <div key={g.name}><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{g.name} · {g.rows.length}</h3>
+                <ul className="space-y-3">{g.rows.map(card)}</ul></div>
+            ))}</div>
+          )}
       </Section>
       {closed.length > 0 && (
         <Section title={`Carried out or dropped (${closed.length})`} right={<button className="text-sm underline" onClick={() => setShowClosed(!showClosed)}>{showClosed ? "hide" : "show"}</button>}>

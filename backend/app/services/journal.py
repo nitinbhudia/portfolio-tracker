@@ -18,6 +18,7 @@ from . import history as HS
 from . import portfolio as P
 
 TAGS = "journal_tags"
+STARS = "journal_starred"  # stocks you marked ★ (stock keys, or "ticker:XYZ" for ideas on stocks you never traded)
 INBOX_DAYS = 90  # trades this recent, without an entry, wait on the To journal list
 TEXT_MAX = {"notes": 10000, "lesson": 2000}
 _CACHE: dict = {}
@@ -47,6 +48,36 @@ def set_tags(db: Session, reasons: list[str] | None, sell_reasons: list[str] | N
         row.value = v
     db.commit()
     return v
+
+
+def stars(db: Session) -> set[str]:
+    row = db.get(m.Setting, STARS)
+    return set((row.value or {}).get("keys", [])) if row else set()
+
+
+def set_star(db: Session, key: str, on: bool) -> dict:
+    key = str(key or "").strip()[:250]
+    if not key:
+        raise P.BadRequest("which stock?")
+    cur = stars(db)
+    cur = cur | {key} if on else cur - {key}
+    row = db.get(m.Setting, STARS)
+    if row is None:
+        db.add(m.Setting(key=STARS, value={"keys": sorted(cur)}))
+    else:
+        row.value = {"keys": sorted(cur)}
+    db.commit()
+    return {"starred": sorted(cur)}
+
+
+def _decorate(db: Session, rows: list[dict]) -> list[dict]:
+    """Things that change without a new upload: your stars and sectors."""
+    from . import whatif as WS
+    st, sec = stars(db), WS.confirmed_sectors(db)
+    for r in rows:
+        r["starred"] = r["stock_key"] in st
+        r["sector"] = sec.get(r["stock_key"])
+    return rows
 
 
 def _entry(e: m.JournalEntry | None) -> dict | None:
@@ -142,7 +173,7 @@ def _since() -> date:
 
 def view(db: Session) -> dict:
     b = _build(db)
-    rows = b["rows"]
+    rows = _decorate(db, b["rows"])
     since = _since().isoformat()
     todo = [r for r in rows if r["status"] == "todo" and r["date"] >= since]
     return {"rows": rows, "tags": tags(db), "inbox": [r["key"] for r in todo], "inbox_days": INBOX_DAYS,
@@ -156,6 +187,7 @@ def detail(db: Session, key: str) -> dict:
     r = b["by_key"].get(key)
     if r is None:
         raise P.NotFound("That trade isn't in your current data (was the workbook changed?).")
+    _decorate(db, [r])
     out = {**r, "fibonacci": _fibonacci(r)}
     if r["kind"] == "sell":
         out["buys"] = [b["by_key"][k] for k in r.get("buy_keys", []) if k in b["by_key"]]
@@ -241,7 +273,8 @@ def skip(db: Session, keys: list[str] | None = None, older: bool = False) -> dic
 
 def stats(db: Session) -> dict:
     b = _build(db)
-    sales = [{"gain_usd": r.get("gain_usd"), "gain_pct": r.get("gain_pct"), "days": r.get("days"), "reasons": r.get("reasons") or [],
+    _decorate(db, b["rows"])
+    sales = [{"sector": r.get("sector"), "starred": r.get("starred"), "gain_usd": r.get("gain_usd"), "gain_pct": r.get("gain_pct"), "days": r.get("days"), "reasons": r.get("reasons") or [],
               "group": r.get("group"), "confidence": r.get("confidence"), "plan": r.get("plan") or [],
               "sell_reason": (r["entry"] or {}).get("sell_reason")} for r in b["rows"] if r["kind"] == "sell" and "gain_usd" in r]
     out = J.stats(sales)

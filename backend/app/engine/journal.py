@@ -131,6 +131,8 @@ def stats(sales: list[dict]) -> dict:
     return {
         "by_reason": agg(lambda s: s["reasons"] or ["(no reason written)"]),
         "by_group": agg(lambda s: [s["group"] or "Not grouped"]),
+        "by_sector": agg(lambda s: [s.get("sector") or "No sector set"]),
+        "by_starred": agg(lambda s: ["★ Starred stocks" if s.get("starred") else "Other stocks"]),
         "by_confidence": agg(lambda s: [f"{s['confidence']} of 5" if s.get("confidence") else "(not rated)"]),
         "by_sell_reason": agg(lambda s: [s["sell_reason"] or "(no reason written)"]),
         "by_holding": agg(lambda s: [_bucket_days(s["days"])]),

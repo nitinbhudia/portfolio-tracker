@@ -65,7 +65,22 @@ def _clean_levels(levels) -> list[dict]:
     return out[:20]
 
 
-def _dict(db: Session, i: m.JournalIdea, check: bool = False) -> dict:
+def _stock_keys(db: Session) -> tuple[dict[str, str], set[str]]:
+    """ticker -> stock key (stocks you traded), and every stock key."""
+    try:
+        st = P._need(db)
+    except P.NotFound:
+        return {}, set()
+    return {t: k for k, t in st["tickers"].items() if t}, {t.stock_key for t in st["rb"].trades}
+
+
+def _dict(db: Session, i: m.JournalIdea, check: bool = False, ctx: tuple | None = None) -> dict:
+    from app.engine.rebuild import name_key
+
+    from . import whatif as WS
+    by_ticker, keys = ctx or _stock_keys(db)
+    sk = by_ticker.get(i.ticker) or (name_key(i.stock) if name_key(i.stock) in keys else None)
+    star_key = sk or f"ticker:{i.ticker}"
     events = list(db.scalars(select(m.JournalIdeaEvent).where(m.JournalIdeaEvent.idea_id == i.id).order_by(m.JournalIdeaEvent.date.desc())))
     last = None
     if i.listing_id:
@@ -75,6 +90,8 @@ def _dict(db: Session, i: m.JournalIdea, check: bool = False) -> dict:
             last = None
     price = last["close"] if last else None
     return {"id": i.id, "stock": i.stock, "ticker": i.ticker, "exchange": i.exchange, "side": i.side, "near_pct": i.near_pct,
+            "stock_key": sk, "star_key": star_key, "starred": star_key in JS.stars(db),
+            "sector": i.sector or (WS.confirmed_sectors(db).get(sk) if sk else None), "own_sector": i.sector,
             "levels": J.distances(i.levels or [], price), "reasons": i.reasons or [], "confidence": i.confidence, "notes": i.notes,
             "status": i.status, "listing_id": i.listing_id, "price_error": i.price_error, "bought_key": i.bought_key,
             "created_at": i.created_at.isoformat(), "updated_at": i.updated_at.isoformat() if i.updated_at else None,
@@ -102,9 +119,11 @@ def check(db: Session) -> dict:
 def view(db: Session, run_check: bool = True) -> dict:
     if run_check:
         check(db)
+    from . import whatif as WS
     ideas = list(db.scalars(select(m.JournalIdea).order_by(m.JournalIdea.status != "watching", m.JournalIdea.updated_at.desc())))
-    return {"ideas": [_dict(db, i) for i in ideas], "unseen": unseen(db), "kinds": list(KINDS), "sides": list(SIDES),
-            "exchanges": list(EXCHANGES), "tags": JS.tags(db)}
+    ctx = _stock_keys(db)
+    return {"ideas": [_dict(db, i, ctx=ctx) for i in ideas], "unseen": unseen(db), "kinds": list(KINDS), "sides": list(SIDES),
+            "exchanges": list(EXCHANGES), "tags": JS.tags(db), "sectors": WS.SECTORS}
 
 
 def unseen(db: Session) -> int:
@@ -129,6 +148,11 @@ def _apply(i: m.JournalIdea, d: dict) -> None:
         if not 0.1 <= float(d["near_pct"]) <= 25:
             raise P.BadRequest("'near' must be between 0.1% and 25%")
         i.near_pct = float(d["near_pct"])
+    if "sector" in d:
+        from . import whatif as WS
+        if d["sector"] not in (None, "") and d["sector"] not in WS.SECTORS:
+            raise P.BadRequest(f"sector must be one of {WS.SECTORS}")
+        i.sector = d["sector"] or None
     if d.get("reasons") is not None:
         i.reasons = [str(x).strip()[:60] for x in d["reasons"] if str(x).strip()][:10]
     if "confidence" in d:

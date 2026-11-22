@@ -8,6 +8,7 @@ import { type Column, DataTable } from "@/components/DataTable";
 import { ErrorBox, Loading, Note, Section, Stat, Usd, btn, btnPrimary, input } from "@/components/ui";
 import { ApiError, apiFetch, jsonInit, useApi } from "@/lib/api";
 
+import { GroupControls, type GroupOpt, Star, groupRows, useGrouping } from "./grouping";
 import { Ideas } from "./Ideas";
 import { num, pct, qty } from "@/lib/format";
 
@@ -22,13 +23,14 @@ type Row = {
   open_shares?: number; since?: Exc | null;
   gain_usd?: number | null; gain_pct?: number | null; days?: number | null; avg_buy_price?: number | null; spx_gain_usd?: number | null;
   vs_spx_usd?: number | null; excursion?: Exc | null; buy_keys?: string[]; group?: string | null; reasons?: string[]; confidence?: number | null; plan?: Check[];
+  starred: boolean; sector: string | null;
 };
 type Detail = Row & { fibonacci: { listing_id: number; nearest: { ratio: number; kind: string; price: number } | null; direction: string } | null;
   buys?: Row[]; sales?: Row[] };
 type View = { rows: Row[]; tags: { reasons: string[]; sell_reasons: string[] }; inbox: string[]; inbox_days: number;
   counts: { trades: number; done: number; skipped: number; todo_recent: number; todo_older: number } };
 type Agg = { label: string; sales: number; wins: number; win_rate: number | null; avg_gain_pct: number | null; total_gain_usd: number; avg_days: number | null };
-type Stats = { by_reason: Agg[]; by_group: Agg[]; by_confidence: Agg[]; by_sell_reason: Agg[]; by_holding: Agg[]; sales: number; journaled_sales: number;
+type Stats = { by_reason: Agg[]; by_group: Agg[]; by_sector: Agg[]; by_starred: Agg[]; by_confidence: Agg[]; by_sell_reason: Agg[]; by_holding: Agg[]; sales: number; journaled_sales: number;
   plan: { sales_with_plan: number; followed: number; broke: number; by_code: Record<string, number> };
   left_on_table: { sales: number; gave_back_15: number; examples: { key: string; stock: string; date: string; best_pct: number; gain_pct: number }[] };
   lessons: { key: string; stock: string; date: string; lesson: string }[] };
@@ -207,6 +209,8 @@ function Works({ tags, onOpen, onTags }: { tags: View["tags"]; onOpen: (k: strin
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <AggTable title="By reason for buying" rows={d.by_reason} />
         <AggTable title="By group" rows={d.by_group} />
+        <AggTable title="By sector" rows={d.by_sector} />
+        <AggTable title="Starred stocks vs the rest" rows={d.by_starred} />
         <AggTable title="By reason for selling" rows={d.by_sell_reason} />
         <AggTable title="By how long you held" rows={d.by_holding} />
         <AggTable title="By confidence when buying" rows={d.by_confidence} />
@@ -234,6 +238,31 @@ function Works({ tags, onOpen, onTags }: { tags: View["tags"]; onOpen: (k: strin
   );
 }
 
+const buyReasons = (r: Row) => (r.kind === "buy" ? r.entry?.reasons ?? [] : r.reasons ?? []);
+const TRADE_GROUPS: GroupOpt<Row>[] = [
+  { key: "sector", label: "sector", of: (r) => [r.sector ?? "No sector set"] },
+  { key: "stock", label: "stock", of: (r) => [r.stock], order: "name" },
+  { key: "starred", label: "starred or not", of: (r) => [r.starred ? "★ Starred" : "Not starred"] },
+  { key: "kind", label: "buys / sales", of: (r) => [r.kind === "buy" ? "Buys" : "Sales"] },
+  { key: "reason", label: "reason for buying", of: (r) => (buyReasons(r).length ? buyReasons(r) : ["(no reason written)"]) },
+  { key: "sell", label: "reason for selling", of: (r) => (r.kind === "sell" ? [r.entry?.sell_reason ?? "(no reason written)"] : ["(buys)"]) },
+  { key: "group", label: "sale group", of: (r) => (r.kind === "sell" ? [r.group ?? "Not grouped"] : ["(buys)"]) },
+  { key: "currency", label: "currency", of: (r) => [r.currency] },
+  { key: "broker", label: "broker", of: (r) => [r.broker || "(no broker)"] },
+  { key: "year", label: "year", of: (r) => [r.date.slice(0, 4)], order: "desc" },
+  { key: "notes", label: "notes written or not", of: (r) => [r.status === "done" ? "With notes" : r.status === "skipped" ? "Skipped" : "No notes yet"] },
+];
+
+function GroupSummary({ name, rows }: { name: string; rows: Row[] }) {
+  const sales = rows.filter((r) => r.kind === "sell" && r.gain_usd != null);
+  const gain = sales.reduce((a, r) => a + (r.gain_usd ?? 0), 0);
+  const wins = sales.filter((r) => (r.gain_usd ?? 0) > 0).length;
+  return (
+    <span className="flex flex-wrap items-baseline gap-x-3"><b>{name}</b><span className="text-xs text-slate-500">{rows.length} trades
+      {sales.length > 0 && <> · {sales.length} sales · {Math.round((wins / sales.length) * 100)}% winners · realised <Usd v={gain} /></>}</span></span>
+  );
+}
+
 function JournalPage() {
   const params = useSearchParams();
   const q = useApi<View>("/api/journal");
@@ -241,6 +270,8 @@ function JournalPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [stock, setStock] = useState<string | null>(params.get("stock"));
   const [busy, setBusy] = useState(false);
+  const [openAll, setOpenAll] = useState<boolean | null>(null);
+  const grouping = useGrouping("journal-trades");
   const d = q.data;
   useEffect(() => {  // from Sales/Positions: open the trade, or show that stock's trades
     if (!d) return;
@@ -253,7 +284,9 @@ function JournalPage() {
   if (q.error) return <ErrorBox error={q.error} onRetry={q.reload} />;
   if (!d) return <Loading />;
   const inbox = d.inbox.map((k) => byKey.get(k)!).filter(Boolean);
-  const rows = stock ? d.rows.filter((r) => r.stock_key === stock) : d.rows;
+  const rows = (stock ? d.rows.filter((r) => r.stock_key === stock) : d.rows).filter((r) => !grouping.starredOnly || r.starred);
+  const gopt = TRADE_GROUPS.find((g) => g.key === grouping.group);
+  const groups = gopt ? groupRows(rows, gopt) : null;
   const skip = async (body: { keys?: string[]; older?: boolean }) => {
     setBusy(true);
     try { q.setData(await apiFetch<View>("/api/journal/skip", jsonInit("POST", body))); } finally { setBusy(false); }
@@ -261,7 +294,10 @@ function JournalPage() {
   const cols: Column<Row>[] = [
     { key: "date", label: "Date", type: "date", get: (r) => r.date },
     { key: "kind", label: "", type: "enum", get: (r) => r.kind, render: (r) => kindTag(r.kind) },
+    { key: "star", label: "★", type: "enum", get: (r) => (r.starred ? "★" : "☆"), title: "Your most interesting stocks",
+      render: (r) => <Star starKey={r.stock_key} on={r.starred} label={r.stock} onChange={q.reload} /> },
     { key: "stock", label: "Stock", type: "text", get: (r) => r.stock },
+    { key: "sector", label: "Sector", type: "enum", get: (r) => r.sector ?? "No sector set", defaultHidden: true },
     { key: "shares", label: "Shares", type: "number", align: "right", get: (r) => r.shares, render: (r) => qty(r.shares) },
     { key: "price", label: "Price", type: "number", align: "right", get: (r) => r.price, render: (r) => num(r.price) },
     { key: "gain", label: "Gain $", type: "number", align: "right", firstDir: "desc", get: (r) => r.gain_usd ?? null, render: (r) => r.kind === "sell" ? <Usd v={r.gain_usd} /> : "" },
@@ -316,8 +352,28 @@ function JournalPage() {
           {tab === "all" && (
             <Section title={stock ? `${rows[0]?.stock ?? stock}: ${rows.length} trades` : `${d.counts.trades} trades · ${d.counts.done} with notes`}
               right={stock ? <button className="text-sm underline" onClick={() => setStock(null)}>show all stocks</button> : undefined}>
-              <DataTable id="pt-journal" rows={rows} columns={cols} rowKey={(r) => r.key} initialSort={[{ key: "date", dir: "desc" }]} exportName="journal"
-                rowClassName={(r) => (r.key === open ? "bg-slate-50 dark:bg-slate-800/50" : "")} />
+              <GroupControls opts={TRADE_GROUPS} group={grouping.group} setGroup={(g) => { grouping.setGroup(g); setOpenAll(null); }}
+                starredOnly={grouping.starredOnly} setStarredOnly={grouping.setStarredOnly}
+                extra={groups && <span className="flex gap-2 text-xs"><button className="underline" onClick={() => setOpenAll(true)}>expand all</button>
+                  <button className="underline" onClick={() => setOpenAll(false)}>collapse all</button></span>} />
+              {grouping.starredOnly && rows.length === 0 && <p className="text-sm text-slate-500">No starred stocks yet: press ☆ next to a stock to star it.</p>}
+              {!groups ? (
+                <DataTable id="pt-journal" rows={rows} columns={cols} rowKey={(r) => r.key} initialSort={[{ key: "date", dir: "desc" }]} exportName="journal"
+                  rowClassName={(r) => (r.key === open ? "bg-slate-50 dark:bg-slate-800/50" : "")} />
+              ) : (
+                <div className="space-y-2">
+                  {groups.map((g, i) => (
+                    <details key={`${grouping.group}:${g.name}:${openAll}`} open={openAll ?? i === 0} className="group rounded border border-slate-200 dark:border-slate-700">
+                      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
+                        <span aria-hidden className="text-xs text-slate-500 transition-transform group-open:rotate-90">▶</span><GroupSummary name={g.name} rows={g.rows} /></summary>
+                      <div className="px-3 pb-3">
+                        <DataTable id="pt-journal-grouped" rows={g.rows} columns={cols} rowKey={(r) => r.key} initialSort={[{ key: "date", dir: "desc" }]} compact
+                          rowClassName={(r) => (r.key === open ? "bg-slate-50 dark:bg-slate-800/50" : "")} />
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              )}
             </Section>
           )}
           {tab === "ideas" && <Ideas onOpenTrade={(k) => setOpen(k)} />}

@@ -135,8 +135,23 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
+# Columns added after a table first shipped: created on older databases at start-up (SQLite ADD COLUMN, nullable).
+ADDED_COLUMNS = {"journal_ideas": {"sector": "VARCHAR(60)"}}
+
+
 def init_db(eng=None) -> None:
-    Base.metadata.create_all(eng or engine)
+    from sqlalchemy import inspect, text
+    eng = eng or engine
+    Base.metadata.create_all(eng)
+    insp = inspect(eng)
+    with eng.begin() as c:
+        for table, cols in ADDED_COLUMNS.items():
+            if not insp.has_table(table):
+                continue
+            have = {x["name"] for x in insp.get_columns(table)}
+            for col, ddl in cols.items():
+                if col not in have:
+                    c.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
 
 
 class IndexPrice(Base):
@@ -190,6 +205,7 @@ class JournalIdea(Base):
     ticker: Mapped[str] = mapped_column(String(30))
     exchange: Mapped[str] = mapped_column(String(10), default="US")  # US (Tiingo) or a European MIC
     side: Mapped[str] = mapped_column(String(5), default="buy")  # buy | sell | watch
+    sector: Mapped[str | None] = mapped_column(String(60), nullable=True)  # else the sector of the stock if you hold/held it
     levels: Mapped[list] = mapped_column(JSON, default=list)  # [{label, kind: entry|target|stop|alert, price}]
     near_pct: Mapped[float] = mapped_column(Float, default=3.0)
     reasons: Mapped[list] = mapped_column(JSON, default=list)
