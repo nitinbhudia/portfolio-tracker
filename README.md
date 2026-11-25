@@ -131,7 +131,8 @@ It shows:
 - **spending a set amount:** what that amount buys, and the average it gives;
 - **the formula.**
 
-Keep as many stocks as you like; they're saved in the app as you type.
+Keep as many stocks as you like; they're saved in the app as you type. **☆ Watch for…** puts the buy-more price (and your
+break-even) on the journal's **opportunity watch list** (enter the ticker if it isn't filled in).
 
 ## Journal (top menu)
 
@@ -167,8 +168,9 @@ everything.
 **Ideas:** write a trade down before you make it: the stock, its price levels (entry, target, stop, or any level, with
 one-click Fibonacci levels) and why.
 - Adding an idea downloads the stock's prices in Research.
-- After every price refresh, each level is checked. It's marked **near** when a close comes within 3% (adjustable),
-  and **hit** when a day's range touches it.
+- After every price refresh, each level is checked as the price gets closer: it's flagged **within 10%**, then
+  **within 5%** (you can change these stages per idea, e.g. 10, 5, 2), and when a day's range **hits** it.
+- If the price jumps past several stages in one day, you get one flag (the closest), not several.
 - New ones show as a badge on Journal.
 - **I bought it** copies the idea's plan into that buy's journal entry, so plan vs reality works.
 

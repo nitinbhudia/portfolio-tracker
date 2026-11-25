@@ -750,6 +750,7 @@ class IdeaIn(BaseModel):
     side: str | None = None
     levels: list[dict] | None = None
     near_pct: float | None = None
+    alert_pcts: list[float] | None = None
     reasons: list[str] | None = None
     confidence: int | None = None
     notes: str | None = None

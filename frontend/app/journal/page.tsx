@@ -318,7 +318,7 @@ function JournalPage() {
         <h1 className="text-xl font-semibold">Trade journal</h1>
         <div className="flex items-center gap-2">
           <div role="tablist" aria-label="Journal views" className="flex overflow-hidden rounded border border-slate-300 text-sm dark:border-slate-700">
-            {([["todo", `To journal (${inbox.length})`], ["all", "All trades"], ["ideas", "Ideas"], ["works", "What works"]] as const).map(([k, l]) => (
+            {([["todo", `To journal (${inbox.length})`], ["all", "All trades"], ["ideas", "Watch list & ideas"], ["works", "What works"]] as const).map(([k, l]) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                 className={`px-2.5 py-1 ${tab === k ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>{l}</button>
             ))}

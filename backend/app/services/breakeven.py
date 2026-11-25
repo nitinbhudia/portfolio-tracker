@@ -46,6 +46,9 @@ def _clean(c: dict, i: int) -> dict:
         "target": _num(c.get("target"), "target average"),
         "budget": _num(c.get("budget"), "budget"),
         "pool": (str(c["pool"])[:240] if c.get("pool") else None),
+        "ticker": (str(c.get("ticker") or "").strip().upper()[:30] or None),
+        "exchange": (str(c.get("exchange") or "US").strip().upper()[:10]),
+        "watch_id": int(c["watch_id"]) if str(c.get("watch_id") or "").isdigit() else None,
         "notes": str(c.get("notes") or "")[:2000] or None,
     }
 

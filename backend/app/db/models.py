@@ -136,7 +136,8 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 # Columns added after a table first shipped: created on older databases at start-up (SQLite ADD COLUMN, nullable).
-ADDED_COLUMNS = {"journal_ideas": {"sector": "VARCHAR(60)"}}
+ADDED_COLUMNS = {"journal_ideas": {"sector": "VARCHAR(60)", "alert_pcts": "JSON"},
+                 "journal_idea_events": {"within_pct": "FLOAT"}}
 
 
 def init_db(eng=None) -> None:
@@ -207,7 +208,8 @@ class JournalIdea(Base):
     side: Mapped[str] = mapped_column(String(5), default="buy")  # buy | sell | watch
     sector: Mapped[str | None] = mapped_column(String(60), nullable=True)  # else the sector of the stock if you hold/held it
     levels: Mapped[list] = mapped_column(JSON, default=list)  # [{label, kind: entry|target|stop|alert, price}]
-    near_pct: Mapped[float] = mapped_column(Float, default=3.0)
+    near_pct: Mapped[float] = mapped_column(Float, default=3.0)  # before stages existed: one "near" %
+    alert_pcts: Mapped[list | None] = mapped_column(JSON, nullable=True)  # stages, e.g. [10, 5]: flag within 10%, then 5%
     reasons: Mapped[list] = mapped_column(JSON, default=list)
     confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notes: Mapped[str | None] = mapped_column(String(10000), nullable=True)
@@ -227,6 +229,7 @@ class JournalIdeaEvent(Base):
     label: Mapped[str] = mapped_column(String(100))
     level: Mapped[float] = mapped_column(Float)
     kind: Mapped[str] = mapped_column(String(5))  # near | hit
+    within_pct: Mapped[float | None] = mapped_column(Float, nullable=True)  # for near: the stage (10, 5…)
     date: Mapped[date] = mapped_column(Date)
     price: Mapped[float] = mapped_column(Float)
     seen: Mapped[bool] = mapped_column(Boolean, default=False)

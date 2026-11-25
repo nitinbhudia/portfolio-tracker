@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ErrorBox, Section, Stat, btn, input } from "@/components/ui";
@@ -9,7 +10,8 @@ import { num, pct, qty } from "@/lib/format";
 
 type Lot = { shares: number | null; price: number | null; fee: number | null; date?: string | null };
 export type Calc = { id: string; name: string; currency: string; lots: Lot[]; price: number | null; buy_price: number | null; buy_fee: number | null;
-  steps: number[]; target: number | null; budget: number | null; pool?: string | null; notes?: string | null };
+  steps: number[]; target: number | null; budget: number | null; pool?: string | null; notes?: string | null;
+  ticker?: string | null; exchange?: string | null; watch_id?: number | null };
 
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const blank = (): Calc => ({ id: newId(), name: "", currency: "USD", lots: [{ shares: null, price: null, fee: null }], price: null, buy_price: null,
@@ -24,6 +26,56 @@ function NumBox({ value, onChange, label, w = "w-24", placeholder }: { value: nu
   useEffect(() => { if (toNum(text) !== value) setText(value == null ? "" : String(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   return <input aria-label={label} inputMode="decimal" className={`${input} num ${w}`} value={text} placeholder={placeholder}
     onChange={(e) => { setText(e.target.value); onChange(toNum(e.target.value)); }} />;
+}
+
+const EXCHANGES = ["US", "XETR", "XAMS", "XPAR", "XSWX", "XLON"];
+
+/** Put the buy-more price (and the break-even) on the journal's opportunity watch list: flagged within 10%, 5%, and when hit. */
+function WatchButton({ c, buyAt, average, onChange }: { c: Calc; buyAt: number | null; average: number | null; onChange: (p: Partial<Calc>) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const cur = c.currency || "USD";
+  const add = async () => {
+    if (!c.ticker || buyAt == null) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const levels = [{ label: `Buy more at ${num(buyAt)}`, kind: "entry", price: buyAt },
+        ...(average != null && Math.abs(average - buyAt) / buyAt > 0.005 ? [{ label: "Back to break-even", kind: "target", price: Math.round(average * 100) / 100 }] : [])];
+      const i = await apiFetch<{ id: number; price_error: string | null }>("/api/journal/ideas", jsonInit("POST", {
+        ticker: c.ticker, exchange: c.exchange || "US", stock: c.name || c.ticker, side: "buy", levels, alert_pcts: [10, 5],
+        notes: `From the break-even calculator: break-even ${money(average, cur)}; buying more at ${money(buyAt, cur)} ${average != null && buyAt < average ? "lowers" : "raises"} it.` }));
+      onChange({ watch_id: i.id });
+      setMsg(i.price_error ? `Added, but no prices yet: ${i.price_error}` : null);
+    } catch (e) {
+      setMsg(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="rounded border border-amber-300 bg-amber-50/60 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/30">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">Opportunity watch list</span>
+        {c.watch_id ? (
+          <span>✓ Watching {money(buyAt, cur)}: you&apos;ll be flagged when the price is within 10%, then 5%, and when it&apos;s reached.{" "}
+            <Link className="underline" href="/journal?tab=ideas">Open the watch list</Link>{" "}
+            <button className="text-xs underline" onClick={() => onChange({ watch_id: null })}>add again</button></span>
+        ) : (
+          <>
+            <label className="flex items-center gap-1 text-xs">Ticker<input aria-label="Ticker" className={`${input} w-20 uppercase`} value={c.ticker ?? ""} placeholder="MU"
+              onChange={(e) => onChange({ ticker: e.target.value.toUpperCase().trim() || null })} /></label>
+            <select aria-label="Exchange" className={`${input} text-xs`} value={c.exchange ?? "US"} onChange={(e) => onChange({ exchange: e.target.value })}>
+              {EXCHANGES.map((x) => <option key={x} value={x}>{x}</option>)}</select>
+            <button className={btn} disabled={busy || !c.ticker || buyAt == null} onClick={add}>
+              {busy ? "Adding (downloading prices)…" : `☆ Watch for ${buyAt != null ? money(buyAt, cur) : "a buy price"}`}</button>
+            <span className="text-xs text-slate-500">{!c.ticker ? "enter the ticker to watch its price" : buyAt == null ? "enter a price to buy more at" : "flags within 10% and 5%, then when it's reached"}</span>
+          </>
+        )}
+      </div>
+      {msg && <p className="mt-1 text-xs text-rose-700 dark:text-rose-400">{msg}</p>}
+    </div>
+  );
 }
 
 function CalcCard({ c, onChange, onRemove, onCopy }: { c: Calc; onChange: (c: Calc) => void; onRemove: () => void; onCopy: () => void }) {
@@ -139,6 +191,7 @@ function CalcCard({ c, onChange, onRemove, onCopy }: { c: Calc; onChange: (c: Ca
                       : <span>buys <b>{qty(bShares)} {bShares === 1 ? "share" : "shares"}</b> → average {money(buyMore(h, buyAt, bShares, fee).average, cur)} ({money(c.budget! - buyMore(h, buyAt, bShares, fee).extra, cur)} left)</span>)}</div>
                 </div>
               </div>
+              <WatchButton c={c} buyAt={buyAt} average={h.average} onChange={set} />
               <p className="text-sm">Formula: <b className="num">new average = ({money(h.cost, cur)}{fee ? ` + ${money(fee, cur)}` : ""} + {money(buyAt, cur)} × additional shares) ÷ ({qty(h.shares)} + additional shares)</b></p>
               <p className="text-xs text-slate-500">Any buy below your break-even lowers it, but doesn&apos;t make a profit more likely: it puts more money into the same stock. You are in profit
                 only when the price rises above the new average{fee ? "" : " (fees and taxes not included unless you enter them)"}.</p>
@@ -179,7 +232,7 @@ export default function BreakevenTab({ pool }: { pool?: string | null }) {
     const p = positions?.positions.find((x) => x.pool === poolKey);
     if (!p) return list;
     const s = p.pence ? 0.01 : 1;
-    const c: Calc = { ...blank(), name: p.stock, currency: p.currency, pool: p.pool, price: p.price != null ? p.price * s : null,
+    const c: Calc = { ...blank(), name: p.stock, currency: p.currency, pool: p.pool, ticker: p.ticker ?? null, exchange: "US", price: p.price != null ? p.price * s : null,
       lots: p.lots.map((l) => ({ shares: l.shares, price: Math.round(l.price * s * 1e6) / 1e6, date: l.date,
         fee: Math.round(Math.max(0, l.cost_local - l.shares * l.price * s) * 100) / 100 || null })) };
     const rest = list.filter((x) => x.pool !== poolKey && !(list.length === 1 && !x.name && !x.lots.some((l) => l.shares))); // replace an empty first card
