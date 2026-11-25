@@ -80,16 +80,25 @@ def test_api_write_skip_stats_and_entries_survive_a_reimport(client):  # noqa: F
     assert t["reasons"] == ["Mine"] and t["sell_reasons"] == J.SELL_REASONS
 
 
-def test_check_levels():
+def test_check_levels_in_stages():
     d = date(2024, 3, 1)
-    bars = [(d, 101, 99, 100), (d + timedelta(days=1), 103, 98, 102), (d + timedelta(days=2), 96, 90, 92)]
-    lv = [{"label": "entry", "price": 95}, {"label": "near", "price": 104}, {"label": "far", "price": 50}]
-    ev = {(e["label"], e["kind"]): e for e in J.check_levels(lv, bars, set(), 3.0, hit_from=d + timedelta(days=1))}
-    assert set(ev) == {("entry", "hit"), ("near", "near")}  # 95 touched on day 3; 104 within 3% of 102 on day 2
-    assert ev[("entry", "hit")]["date"] == d + timedelta(days=2)
-    assert J.check_levels(lv, bars, {("entry", "hit"), ("near", "near")}, 3.0) == []  # each fires once
-    early = [{"label": "x", "price": 100}]
-    assert [e["kind"] for e in J.check_levels(early, bars[:1], set(), 3.0, hit_from=d + timedelta(days=1))] == ["near"]  # before: near only
+    day = lambda i: d + timedelta(days=i)  # noqa: E731
+    # level 100: closes 120 (20% away), 109 (9%: within 10%), 104 (4%: within 5%), then the day's range touches 100
+    bars = [(day(0), 121, 119, 120), (day(1), 110, 108, 109), (day(2), 105, 103, 104), (day(3), 104, 99, 101)]
+    ev = J.check_levels([{"label": "buy", "price": 100}], bars, set(), [10, 5], hit_from=day(1))
+    assert [(e["kind"], e["within_pct"], e["date"], e["quiet"]) for e in ev] == [
+        ("near", 10.0, day(1), False), ("near", 5.0, day(2), False), ("hit", None, day(3), False)]
+    fired = {("buy", "near", 10.0), ("buy", "near", 5.0), ("buy", "hit", None)}
+    assert J.check_levels([{"label": "buy", "price": 100}], bars, fired, [10, 5]) == []  # each stage fires once
+    # a jump from 20% away straight to 3%: only the closest stage is news
+    jump = [(day(0), 121, 119, 120), (day(1), 104, 102, 103)]
+    ev = J.check_levels([{"label": "buy", "price": 100}], jump, set(), [10, 5], hit_from=day(1))
+    assert [(e["within_pct"], e["quiet"]) for e in ev] == [(10.0, True), (5.0, False)]
+    # a level above the price (a breakout) works the same way; a single number still works (older ideas)
+    up = J.check_levels([{"label": "breakout", "price": 110}], [(day(0), 101, 99, 100), (day(1), 106, 104, 105)], set(), 5.0)
+    assert [(e["kind"], e["within_pct"]) for e in up] == [("near", 5.0)]
+    # before the idea was written: the last close counts for "within", not for "hit"
+    assert [e["kind"] for e in J.check_levels([{"label": "x", "price": 100}], [(day(0), 101, 99, 100)], set(), [10, 5], hit_from=day(1))] == ["near", "near"]
     assert J.distances([{"label": "a", "price": 110}], 100)[0]["distance_pct"] == pytest.approx(10)
 
 
@@ -104,8 +113,11 @@ def test_ideas_api(client, monkeypatch):  # noqa: F811
         {"label": "entry", "kind": "entry", "price": 46}, {"label": "target", "kind": "target", "price": 46.5}, {"label": "far", "kind": "alert", "price": 80}]})
     assert r.status_code == 200, r.text
     i = r.json()
-    assert i["ticker"] == "ABC" and {(e["label"], e["kind"]) for e in i["events"]} == {("entry", "hit"), ("target", "hit")}
-    assert client.get("/api/journal/ideas/unseen").json() == {"unseen": 2}
+    assert i["ticker"] == "ABC" and i["alert_pcts"] == [10.0, 5.0]
+    news = {(e["label"], e["kind"], e["within_pct"]) for e in i["events"] if not e["seen"]}
+    # yesterday's close (50) was within 10% of both; today's range hit both (the 5% stage the same day is recorded quietly)
+    assert news == {("entry", "near", 10.0), ("entry", "hit", None), ("target", "near", 10.0), ("target", "hit", None)}
+    assert client.get("/api/journal/ideas/unseen").json() == {"unseen": 4}
     client.post("/api/journal/ideas/seen")
     assert client.get("/api/journal/ideas/unseen").json() == {"unseen": 0}
     # moving a level re-arms it
@@ -113,6 +125,9 @@ def test_ideas_api(client, monkeypatch):  # noqa: F811
                                                                     {"label": "far", "kind": "alert", "price": 80}]}).json()
     assert [e["label"] for e in i["events"]] == [] and i["levels"][0]["distance_pct"] == pytest.approx((30 / 45 - 1) * 100)
     assert client.put(f"/api/journal/ideas/{i['id']}", json={"levels": [{"label": "a", "price": -1}]}).status_code == 400
+    assert client.put(f"/api/journal/ideas/{i['id']}", json={"alert_pcts": [5, 10, 10, 2]}).json()["alert_pcts"] == [10, 5, 2]
+    for bad in ([], [0], [60], ["x"], [1, 2, 3, 4, 5]):
+        assert client.put(f"/api/journal/ideas/{i['id']}", json={"alert_pcts": bad}).status_code in (400, 422)
     assert client.post("/api/journal/ideas", json={"ticker": "A", "exchange": "XNYC"}).status_code == 400
     # carried out: the plan goes into the buy's journal entry
     buy = next(r for r in client.get("/api/journal").json()["rows"] if r["kind"] == "buy")
@@ -142,3 +157,17 @@ def test_stars_and_sectors(client, monkeypatch):  # noqa: F811
     assert client.get("/api/journal/ideas").json()["ideas"][0]["starred"] is True
     assert client.put(f"/api/journal/ideas/{i['id']}", json={"sector": "Nonsense"}).status_code == 400
     assert client.put("/api/journal/star", json={"key": " ", "starred": True}).status_code == 400
+
+
+def test_older_databases_get_the_new_columns():
+    from sqlalchemy import create_engine, inspect, text
+
+    from app.db import models as m
+    e = create_engine("sqlite://")
+    with e.begin() as c:
+        c.execute(text("CREATE TABLE journal_ideas (id INTEGER PRIMARY KEY, stock VARCHAR(200))"))
+        c.execute(text("CREATE TABLE journal_idea_events (id INTEGER PRIMARY KEY, label VARCHAR(100))"))
+    m.init_db(e)
+    m.init_db(e)  # twice: nothing to add the second time
+    assert {"sector", "alert_pcts"} <= {x["name"] for x in inspect(e).get_columns("journal_ideas")}
+    assert "within_pct" in {x["name"] for x in inspect(e).get_columns("journal_idea_events")}

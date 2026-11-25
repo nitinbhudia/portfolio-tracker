@@ -119,6 +119,21 @@ The risk of what you hold today:
 Market risk needs daily prices (Data ▾ Price history) and the S&P 500 (vs Indexes). Positions without them are listed
 and left out.
 
+## Break-even calculator (What-if → Break-even calculator, or 🧮 on Positions)
+
+Type any stock, held or not, and the shares and prices you bought at (fees optional), or load one of your positions.
+It shows:
+- **your position:** your break-even (average cost), and, with the price now, your gain or loss and the rise needed to
+  break even;
+- **buying more at a price you choose:** a table of additional shares, extra investment, new average and how much the
+  price must rise. The default rows are 1, half, as many again and double; add your own rows;
+- **reaching a target average:** how many shares it takes to get the average below round levels or your own target;
+- **spending a set amount:** what that amount buys, and the average it gives;
+- **the formula.**
+
+Keep as many stocks as you like; they're saved in the app as you type. **☆ Watch for…** puts the buy-more price (and your
+break-even) on the **opportunity watch list** (the next tab) (enter the ticker if it isn't filled in).
+
 ## Journal (top menu)
 
 One entry per trade:
@@ -143,20 +158,22 @@ Entries stay attached when you re-upload the workbook. 📝 on Sales and Positio
 everything.
 
 **★ Stars and grouping:**
-- ☆ next to a stock (on All trades and Ideas) stars it as one of your most interesting stocks.
+- ☆ next to a stock (on All trades, and on the What-if opportunity watch list) stars it as one of your most interesting
+  stocks.
 - **Starred only** shows just those.
 - **Group by** splits **All trades** by sector, stock, starred, buys/sales, buy or sell reason, sale group, currency,
   broker, year or notes. Each group shows its trades, sales, winners and realised gain.
-- **Ideas** can be grouped by sector, starred, buy/sell/watch, reason or triggered.
 - What works adds **By sector** and **Starred vs the rest**.
 
-**Ideas:** write a trade down before you make it: the stock, its price levels (entry, target, stop, or any level, with
-one-click Fibonacci levels) and why.
-- Adding an idea downloads the stock's prices in Research.
-- After every price refresh, each level is checked. It's marked **near** when a close comes within 3% (adjustable),
-  and **hit** when a day's range touches it.
-- New ones show as a badge on Journal.
-- **I bought it** copies the idea's plan into that buy's journal entry, so plan vs reality works.
+**Opportunity watch list** (What-if → Opportunity watch list): write a trade down before you make it: the stock, its
+price levels (entry, target, stop, or any level, with one-click Fibonacci levels) and why.
+- Adding one downloads the stock's prices in Research; the Break-even calculator's **☆ Watch for…** adds one too.
+- After every price refresh, each level is checked as the price gets closer: it's flagged **within 10%**, then
+  **within 5%** (you can change these stages per idea, e.g. 10, 5, 2), and when a day's range **hits** it.
+- If the price jumps past several stages in one day, you get one flag (the closest), not several.
+- New ones show as a badge on **What-if** in the menu.
+- Group it by sector, starred, buy/sell/watch, reason or how close.
+- **I bought it** copies the plan into that buy's journal entry, so plan vs reality works.
 
 ## Demo mode (show the app without your data)
 

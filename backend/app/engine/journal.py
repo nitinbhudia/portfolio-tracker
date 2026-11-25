@@ -150,28 +150,48 @@ def stats(sales: list[dict]) -> dict:
 NEAR_PCT = 3.0
 
 
-def check_levels(levels: list[dict], bars: list[tuple[date, float, float, float]], fired: set[tuple[str, str]],
-                 near_pct: float = NEAR_PCT, hit_from: date | None = None) -> list[dict]:
-    """New triggers for an idea. levels: [{label, price}]; bars: (date, high, low, close), oldest first: the last close
-    before the idea was written, then every day since; fired: (label, kind) already triggered. A level is *hit* when a
-    day's range touches it (days from `hit_from` on), and *near* when a close is within near_pct % of it (before it's
-    hit; the latest close when you write the idea counts). Each fires once per level."""
+ALERT_PCTS = [10.0, 5.0]  # default stages for "getting closer": within 10%, then within 5%, then hit
+
+
+def check_levels(levels: list[dict], bars: list[tuple[date, float, float, float]], fired: set[tuple],
+                 tiers: list[float] | float = NEAR_PCT, hit_from: date | None = None) -> list[dict]:
+    """New triggers for an idea, in stages as the price gets closer to each level.
+
+    levels: [{label, price}]; bars: (date, high, low, close), oldest first: the last close before the idea was written,
+    then every day since; fired: what already triggered, as (label, "near", pct) and (label, "hit", None); tiers: the
+    stages in % (e.g. [10, 5]). A level is *within N%* when a close is that close to it (above or below), and *hit* when a
+    day's range touches it (days from `hit_from` on). Each stage fires once. When the price jumps past several stages on
+    one day, only the closest one is news: the others are returned with quiet=True (recorded, not flagged)."""
+    ts = sorted({float(t) for t in ([tiers] if isinstance(tiers, (int, float)) else tiers) if t and t > 0}, reverse=True)
     out = []
     for lv in levels:
         p = lv.get("price")
         if not p or p <= 0:
             continue
         label = lv.get("label") or f"{p:g}"
-        hit = near = None
+        if (label, "hit", None) in fired:
+            continue
+        hit = None
+        first: dict[float, tuple] = {}
         for d, hi, lo, close in bars:
             if hit is None and lo <= p <= hi and (hit_from is None or d >= hit_from):
                 hit = (d, close)
-            if near is None and abs(close / p - 1) * 100 <= near_pct:
-                near = (d, close)
-        if hit and (label, "hit") not in fired:
-            out.append({"label": label, "level": p, "kind": "hit", "date": hit[0], "price": hit[1]})
-        if near and (label, "near") not in fired and (label, "hit") not in fired and (not hit or near[0] < hit[0]):
-            out.append({"label": label, "level": p, "kind": "near", "date": near[0], "price": near[1]})
+            dist = abs(close / p - 1) * 100
+            for t in ts:
+                if t not in first and dist <= t:
+                    first[t] = (d, close)
+        new = []
+        for t in ts:
+            if t in first and (label, "near", t) not in fired and (not hit or first[t][0] < hit[0]):
+                new.append({"label": label, "level": p, "kind": "near", "within_pct": t, "date": first[t][0], "price": first[t][1]})
+        if hit:
+            new.append({"label": label, "level": p, "kind": "hit", "within_pct": None, "date": hit[0], "price": hit[1]})
+        tightest_fired = min((k[2] for k in fired if k[0] == label and k[1] == "near" and k[2] is not None), default=None)
+        for i, e in enumerate(new):
+            later_same_day = any(x["date"] == e["date"] for x in new[i + 1:])  # a closer stage (or the hit) on the same day
+            looser = e["kind"] == "near" and tightest_fired is not None and e["within_pct"] > tightest_fired
+            e["quiet"] = later_same_day or looser
+        out += new
     return out
 
 

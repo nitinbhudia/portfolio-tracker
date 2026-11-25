@@ -47,6 +47,11 @@ def _track(ticker: str, exchange: str) -> tuple[int | None, str | None]:
         return None, (getattr(e, "message", None) or str(e))[:300]
 
 
+def stages(i: m.JournalIdea) -> list[float]:
+    """The idea's stages, closest last: its own, or the single 'near' % of ideas written before stages existed."""
+    return sorted(i.alert_pcts, reverse=True) if i.alert_pcts else [i.near_pct or J.NEAR_PCT]
+
+
 def _clean_levels(levels) -> list[dict]:
     out = []
     for lv in levels or []:
@@ -89,13 +94,14 @@ def _dict(db: Session, i: m.JournalIdea, check: bool = False, ctx: tuple | None 
         except Exception:  # noqa: BLE001
             last = None
     price = last["close"] if last else None
-    return {"id": i.id, "stock": i.stock, "ticker": i.ticker, "exchange": i.exchange, "side": i.side, "near_pct": i.near_pct,
+    return {"id": i.id, "stock": i.stock, "ticker": i.ticker, "exchange": i.exchange, "side": i.side, "near_pct": i.near_pct, "alert_pcts": stages(i),
             "stock_key": sk, "star_key": star_key, "starred": star_key in JS.stars(db),
             "sector": i.sector or (WS.confirmed_sectors(db).get(sk) if sk else None), "own_sector": i.sector,
             "levels": J.distances(i.levels or [], price), "reasons": i.reasons or [], "confidence": i.confidence, "notes": i.notes,
             "status": i.status, "listing_id": i.listing_id, "price_error": i.price_error, "bought_key": i.bought_key,
             "created_at": i.created_at.isoformat(), "updated_at": i.updated_at.isoformat() if i.updated_at else None,
             "last": last, "events": [{"id": e.id, "label": e.label, "level": e.level, "kind": e.kind, "date": e.date.isoformat(),
+                                      "within_pct": e.within_pct if e.kind == "hit" or e.within_pct is not None else (i.near_pct or J.NEAR_PCT),
                                       "price": e.price, "seen": e.seen} for e in events]}
 
 
@@ -108,10 +114,12 @@ def check(db: Session) -> dict:
         start = i.created_at.date()
         bars, _ = _bars(i.listing_id, date.fromordinal(start.toordinal() - 14))
         bars = [b for b in bars if b[0] < start][-1:] + [b for b in bars if b[0] >= start]
-        fired = {(e.label, e.kind) for e in db.scalars(select(m.JournalIdeaEvent).where(m.JournalIdeaEvent.idea_id == i.id))}
-        for ev in J.check_levels(i.levels or [], bars, fired, i.near_pct or J.NEAR_PCT, hit_from=start):
-            db.add(m.JournalIdeaEvent(idea_id=i.id, **ev))
-            new += 1
+        fired = {(e.label, e.kind, None if e.kind == "hit" else (e.within_pct if e.within_pct is not None else (i.near_pct or J.NEAR_PCT)))
+                 for e in db.scalars(select(m.JournalIdeaEvent).where(m.JournalIdeaEvent.idea_id == i.id))}
+        for ev in J.check_levels(i.levels or [], bars, fired, stages(i), hit_from=start):
+            quiet = ev.pop("quiet")
+            db.add(m.JournalIdeaEvent(idea_id=i.id, seen=quiet, **ev))
+            new += 0 if quiet else 1
     db.commit()
     return {"new": new}
 
@@ -144,6 +152,14 @@ def _apply(i: m.JournalIdea, d: dict) -> None:
         i.side = d["side"]
     if d.get("levels") is not None:
         i.levels = _clean_levels(d["levels"])
+    if d.get("alert_pcts") is not None:
+        try:
+            ps = sorted({round(float(x), 2) for x in d["alert_pcts"]}, reverse=True)
+        except (TypeError, ValueError):
+            raise P.BadRequest("stages must be numbers, e.g. 10, 5") from None
+        if not ps or len(ps) > 4 or any(not 0.1 <= x <= 50 for x in ps):
+            raise P.BadRequest("give 1 to 4 stages between 0.1% and 50%, e.g. 10, 5")
+        i.alert_pcts = ps
     if d.get("near_pct") is not None:
         if not 0.1 <= float(d["near_pct"]) <= 25:
             raise P.BadRequest("'near' must be between 0.1% and 25%")
@@ -178,7 +194,8 @@ def create(db: Session, d: dict) -> dict:
     ex = str(d.get("exchange") or "US").upper()
     if ex not in EXCHANGES:
         raise P.BadRequest(f"exchange must be one of {', '.join(EXCHANGES)}")
-    i = m.JournalIdea(stock=str(d.get("stock") or t).strip()[:200], ticker=t, exchange=ex, levels=[], reasons=[], near_pct=J.NEAR_PCT)
+    i = m.JournalIdea(stock=str(d.get("stock") or t).strip()[:200], ticker=t, exchange=ex, levels=[], reasons=[], near_pct=J.NEAR_PCT,
+                     alert_pcts=list(J.ALERT_PCTS))
     _apply(i, d)
     i.listing_id, i.price_error = _track(t, ex)
     db.add(i)
@@ -195,6 +212,11 @@ def update(db: Session, idea_id: int, d: dict) -> dict:
     _apply(i, d)
     after = {lv["label"]: lv["price"] for lv in i.levels or []}
     changed = [k for k in before if after.get(k) != before[k]]
+    if d.get("alert_pcts") is not None:  # new stages: near flags start afresh (hits stay)
+        changed = list({*changed, *after})
+        db.execute(delete(m.JournalIdeaEvent).where(m.JournalIdeaEvent.idea_id == i.id, m.JournalIdeaEvent.kind == "near",
+                                                    m.JournalIdeaEvent.label.in_(changed)))
+        changed = [k for k in before if after.get(k) != before[k]]
     if changed:  # a moved or removed level starts afresh
         db.execute(delete(m.JournalIdeaEvent).where(m.JournalIdeaEvent.idea_id == i.id, m.JournalIdeaEvent.label.in_(changed)))
     if d.get("retry_prices") and not i.listing_id:

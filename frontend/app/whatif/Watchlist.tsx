@@ -7,12 +7,12 @@ import { Loading, Section, btn, btnPrimary, input } from "@/components/ui";
 import { ApiError, apiFetch, jsonInit, notifyStatus, useApi } from "@/lib/api";
 import { num, pct } from "@/lib/format";
 
-import { GroupControls, type GroupOpt, Star, groupRows, useGrouping } from "./grouping";
+import { GroupControls, type GroupOpt, Star, groupRows, useGrouping } from "@/components/Grouping";
 
 type Level = { label: string; kind: "entry" | "target" | "stop" | "alert"; price: number; distance_pct?: number | null };
-type Event = { id: number; label: string; level: number; kind: "near" | "hit"; date: string; price: number; seen: boolean };
+type Event = { id: number; label: string; level: number; kind: "near" | "hit"; within_pct: number | null; date: string; price: number; seen: boolean };
 export type Idea = {
-  id: number; stock: string; ticker: string; exchange: string; side: "buy" | "sell" | "watch"; near_pct: number; levels: Level[];
+  id: number; stock: string; ticker: string; exchange: string; side: "buy" | "sell" | "watch"; near_pct: number; alert_pcts: number[]; levels: Level[];
   reasons: string[]; confidence: number | null; notes: string | null; status: "watching" | "done" | "dropped"; listing_id: number | null;
   price_error: string | null; bought_key: string | null; created_at: string; last: { date: string; close: number } | null; events: Event[];
   star_key: string; starred: boolean; sector: string | null; own_sector: string | null; stock_key: string | null;
@@ -25,17 +25,21 @@ const IDEA_GROUPS: GroupOpt<Idea>[] = [
   { key: "starred", label: "starred or not", of: (i) => [i.starred ? "★ Starred" : "Not starred"] },
   { key: "side", label: "buy / sell / watch", of: (i) => [SIDE_LABEL[i.side]] },
   { key: "reason", label: "reason", of: (i) => (i.reasons.length ? i.reasons : ["(no reason written)"]) },
-  { key: "triggered", label: "triggered or not", of: (i) => [i.events.some((e) => e.kind === "hit") ? "A level was hit" : i.events.length ? "Near a level" : "Waiting"] },
+  { key: "triggered", label: "how close", of: (i) => {
+    if (i.events.some((e) => e.kind === "hit")) return ["A level was hit"];
+    const t = Math.min(...i.events.filter((e) => e.within_pct != null).map((e) => e.within_pct as number));
+    return [isFinite(t) ? `Within ${num(t, 0)}%` : "Not close yet"];
+  } },
 ];
 type Buy = { key: string; date: string; stock: string; shares: number; price: number };
 type FibLevel = { ratio: number; kind: string; price: number };
 
 const KIND_LABEL: Record<string, string> = { entry: "Entry", target: "Target", stop: "Stop", alert: "Alert" };
-const blank = { ticker: "", exchange: "US", stock: "", sector: "", side: "buy" as Idea["side"], near_pct: 3, levels: [{ label: "Entry", kind: "entry", price: 0 }] as Level[],
+const blank = { ticker: "", exchange: "US", stock: "", sector: "", side: "buy" as Idea["side"], stagesText: "10, 5", levels: [{ label: "Entry", kind: "entry", price: 0 }] as Level[],
   reasons: [] as string[], confidence: null as number | null, notes: "" };
 
 function IdeaForm({ idea, opts, onDone, onCancel }: { idea?: Idea; opts: IdeasResp; onDone: () => void; onCancel: () => void }) {
-  const [f, setF] = useState(() => idea ? { ticker: idea.ticker, exchange: idea.exchange, stock: idea.stock, sector: idea.own_sector ?? "", side: idea.side, near_pct: idea.near_pct,
+  const [f, setF] = useState(() => idea ? { ticker: idea.ticker, exchange: idea.exchange, stock: idea.stock, sector: idea.own_sector ?? "", side: idea.side, stagesText: idea.alert_pcts.join(", "),
     levels: idea.levels.map(({ label, kind, price }) => ({ label, kind, price })), reasons: idea.reasons, confidence: idea.confidence, notes: idea.notes ?? "" } : blank);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,7 +54,9 @@ function IdeaForm({ idea, opts, onDone, onCancel }: { idea?: Idea; opts: IdeasRe
     setBusy(true);
     setErr(null);
     try {
-      const body = { ...f, levels: f.levels.filter((l) => l.price > 0) };
+      const { stagesText, ...rest } = f;
+      const alert_pcts = stagesText.split(/[,\s]+/).map((x) => Number(x.replace("%", ""))).filter((x) => x > 0);
+      const body = { ...rest, alert_pcts, levels: f.levels.filter((l) => l.price > 0) };
       if (idea) await apiFetch(`/api/journal/ideas/${idea.id}`, jsonInit("PUT", body));
       else await apiFetch("/api/journal/ideas", jsonInit("POST", body));
       onDone();
@@ -73,8 +79,8 @@ function IdeaForm({ idea, opts, onDone, onCancel }: { idea?: Idea; opts: IdeasRe
           {opts.sectors.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
         <label className="flex flex-col gap-1 text-xs">Idea<select className={input} value={f.side} onChange={(e) => setF({ ...f, side: e.target.value as Idea["side"] })}>
           <option value="buy">Buy</option><option value="sell">Sell / trim</option><option value="watch">Just watch</option></select></label>
-        <label className="flex flex-col gap-1 text-xs" title="A level counts as near when a day's close is within this % of it">Near = within
-          <span className="flex items-center gap-1"><input inputMode="decimal" className={`${input} w-14`} value={f.near_pct} onChange={(e) => setF({ ...f, near_pct: Number(e.target.value) || 0 })} />%</span></label>
+        <label className="flex flex-col gap-1 text-xs" title="Flag a level when a day's close gets this close to it, e.g. 10, 5: first within 10%, then within 5%; and when it's hit">Flag when within
+          <span className="flex items-center gap-1"><input aria-label="Flag when within (%)" className={`${input} w-20`} value={f.stagesText} onChange={(e) => setF({ ...f, stagesText: e.target.value })} />%</span></label>
       </div>
       <div>
         <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Price levels{idea?.last && <span className="ml-2 font-normal normal-case">last close {num(idea.last.close)} ({idea.last.date})</span>}</div>
@@ -115,15 +121,22 @@ function IdeaForm({ idea, opts, onDone, onCancel }: { idea?: Idea; opts: IdeasRe
   );
 }
 
-function LevelState({ l, events, isNew }: { l: Level; events: Event[]; isNew: (e: Event) => boolean }) {
-  const hit = events.find((e) => e.label === l.label && e.kind === "hit");
-  const near = events.find((e) => e.label === l.label && e.kind === "near");
-  const e = hit ?? near;
-  if (!e) return <span className="text-slate-400">waiting</span>;
+function LevelState({ l, events, stages, isNew }: { l: Level; events: Event[]; stages: number[]; isNew: (e: Event) => boolean }) {
+  const mine = events.filter((e) => e.label === l.label);
+  const hit = mine.find((e) => e.kind === "hit");
+  const at = (t: number) => mine.find((e) => e.kind === "near" && e.within_pct === t);
+  const latest = hit ?? [...stages].reverse().map(at).find(Boolean);
+  const fresh = mine.some(isNew);
+  const chip = (on: boolean, text: string, title: string, key: string) => (
+    <span key={key} title={title} className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${on ? "bg-amber-500 text-slate-950" : "border border-slate-300 text-slate-400 dark:border-slate-600"}`}>{text}</span>
+  );
   return (
-    <span className={`whitespace-nowrap ${isNew(e) ? "font-semibold" : ""}`}>
-      <span aria-hidden className={hit ? "text-emerald-700 dark:text-emerald-400" : "text-amber-600"}>{hit ? "●" : "◐"}</span>{" "}
-      {hit ? "hit" : "near"} {e.date} at {num(e.price)}{isNew(e) && <span className="ml-1 rounded bg-amber-500 px-1 text-[10px] font-bold text-slate-950">NEW</span>}
+    <span className="inline-flex flex-wrap items-center gap-1 whitespace-nowrap">
+      {stages.map((t) => { const e = at(t); return chip(!!e || !!hit, `${num(t, 0)}%`, e ? `Within ${num(t, 0)}% on ${e.date} (close ${num(e.price)})` : `Flags when a close is within ${num(t, 0)}%`, `s${t}`); })}
+      {chip(!!hit, "hit", hit ? `Hit on ${hit.date}` : "Flags when the day's range touches the level", "hit")}
+      {latest ? <span className={`ml-1 ${fresh ? "font-semibold" : "text-slate-500"}`}>{hit ? `hit ${hit.date}` : `within ${num(latest.within_pct, 0)}% ${latest.date}`}</span>
+        : <span className="ml-1 text-slate-400">waiting</span>}
+      {fresh && <span className="rounded bg-amber-500 px-1 text-[10px] font-bold text-slate-950">NEW</span>}
     </span>
   );
 }
@@ -191,15 +204,15 @@ export function Ideas({ onOpenTrade }: { onOpenTrade: (key: string) => void }) {
                 <thead><tr><th>Level</th><th></th><th className="text-right">Price</th><th className="text-right" title="From the last close">Away</th><th>Status</th></tr></thead>
                 <tbody>{i.levels.map((l) => (
                   <tr key={l.label}><td>{l.label}</td><td className="text-xs text-slate-500">{KIND_LABEL[l.kind]}</td><td className="text-right">{num(l.price)}</td>
-                    <td className="text-right">{pct(l.distance_pct, 1)}</td><td><LevelState l={l} events={i.events} isNew={isNew} /></td></tr>
+                    <td className="text-right">{pct(l.distance_pct, 1)}</td><td><LevelState l={l} events={i.events} stages={i.alert_pcts} isNew={isNew} /></td></tr>
                 ))}</tbody>
               </table>
             </div>
           )}
           {(i.reasons.length > 0 || i.notes || i.confidence) && (
-            <p className="text-sm text-slate-600 dark:text-slate-300">{i.reasons.join(", ")}{i.confidence && ` · confidence ${i.confidence}/5`}{i.notes && <> · {i.notes}</>}</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300">{[i.reasons.join(", "), i.confidence ? `confidence ${i.confidence}/5` : "", i.notes ?? ""].filter(Boolean).join(" · ")}</p>
           )}
-          <p className="text-xs text-slate-500">Written {i.created_at.slice(0, 10)} · near = within {num(i.near_pct, 1)}% of a level · checked after every price refresh</p>
+          <p className="text-xs text-slate-500">Written {i.created_at.slice(0, 10)} · flags when a close gets within {i.alert_pcts.map((t) => `${num(t, 0)}%`).join(", then ")} of a level, and when it&apos;s hit · checked after every price refresh</p>
           {bought === i.id && <Bought idea={i} onDone={() => { setBought(null); q.reload(); }} />}
         </>
       )}
@@ -207,10 +220,11 @@ export function Ideas({ onOpenTrade }: { onOpenTrade: (key: string) => void }) {
   );
   return (
     <div className="space-y-4">
-      <Section title={`Ideas you're watching (${open.length})`} right={editing !== "new" ? <button className={btn} onClick={() => setEditing("new")}>+ New idea</button> : undefined}>
+      <Section title={`Opportunity watch list (${open.length})`} right={editing !== "new" ? <button className={btn} onClick={() => setEditing("new")}>+ New idea</button> : undefined}>
         <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">Write down a trade before you make it: the stock, the price levels that matter (entry, target, stop,
-          or any level to watch) and why. After every price refresh the app checks each level and flags it when a close comes <b>near</b> it or the day&apos;s
-          range <b>hits</b> it; new ones show as a badge on Journal. When you buy, <b>I bought it</b> copies the plan into that buy&apos;s journal entry.</p>
+          or any level to watch) and why. After every price refresh the app checks each level and flags it as the price gets closer: <b>within 10%</b>,
+          then <b>within 5%</b> (you can change these per idea), then when the day&apos;s range <b>hits</b> it. New flags show as a badge on What-if. You can also
+          add a price from the Break-even calculator tab. When you buy, <b>I bought it</b> copies the plan into that buy&apos;s journal entry.</p>
         {editing === "new" && <IdeaForm opts={d} onDone={() => { setEditing(null); q.reload(); }} onCancel={() => setEditing(null)} />}
         <GroupControls opts={IDEA_GROUPS} group={grouping.group} setGroup={grouping.setGroup} starredOnly={grouping.starredOnly} setStarredOnly={grouping.setStarredOnly} />
         {open.length === 0 && editing !== "new" ? <p className="text-sm text-slate-500">{grouping.starredOnly ? "No starred ideas: press ☆ on an idea to star it." : "No ideas yet."}</p>

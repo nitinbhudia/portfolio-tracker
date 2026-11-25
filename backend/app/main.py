@@ -33,6 +33,7 @@ from app.services import whatif as WS  # noqa: E402
 from app.services import risk as RS  # noqa: E402
 from app.services import journal as JS  # noqa: E402
 from app.services import ideas as IS  # noqa: E402
+from app.services import breakeven as BE  # noqa: E402
 from app.demo import service as DS  # noqa: E402
 
 MAX_UPLOAD = 50 * 1024 * 1024
@@ -749,6 +750,7 @@ class IdeaIn(BaseModel):
     side: str | None = None
     levels: list[dict] | None = None
     near_pct: float | None = None
+    alert_pcts: list[float] | None = None
     reasons: list[str] | None = None
     confidence: int | None = None
     notes: str | None = None
@@ -798,6 +800,22 @@ def idea_buys(idea_id: int, db: Session = Depends(get_db)):
 @app.post("/api/journal/ideas/{idea_id}/bought")
 def idea_bought(idea_id: int, body: IdeaBoughtIn, db: Session = Depends(get_db)):
     return IS.bought(db, idea_id, body.key)
+
+
+# ---------------------------------------------------------------- break-even calculator
+
+class BreakevenIn(BaseModel):
+    calcs: list
+
+
+@app.get("/api/breakeven")
+def breakeven(db: Session = Depends(get_db)):
+    return BE.get(db)
+
+
+@app.put("/api/breakeven")
+def breakeven_save(body: BreakevenIn, db: Session = Depends(get_db)):
+    return BE.put(db, body.calcs)
 
 
 # ---------------------------------------------------------------- demo mode
