@@ -59,7 +59,7 @@ function WatchButton({ c, buyAt, average, onChange }: { c: Calc; buyAt: number |
         <span className="font-semibold">Opportunity watch list</span>
         {c.watch_id ? (
           <span>✓ Watching {money(buyAt, cur)}: you&apos;ll be flagged when the price is within 10%, then 5%, and when it&apos;s reached.{" "}
-            <Link className="underline" href="/journal?tab=ideas">Open the watch list</Link>{" "}
+            <Link className="underline" href="/whatif?tab=watch">Open the watch list</Link>{" "}
             <button className="text-xs underline" onClick={() => onChange({ watch_id: null })}>add again</button></span>
         ) : (
           <>

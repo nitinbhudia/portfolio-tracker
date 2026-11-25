@@ -1,15 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 
 import { type Column, DataTable } from "@/components/DataTable";
 import { ErrorBox, Loading, Note, Section, Stat, Usd, btn, btnPrimary, input } from "@/components/ui";
 import { ApiError, apiFetch, jsonInit, useApi } from "@/lib/api";
 
-import { GroupControls, type GroupOpt, Star, groupRows, useGrouping } from "./grouping";
-import { Ideas } from "./Ideas";
+import { GroupControls, type GroupOpt, Star, groupRows, useGrouping } from "@/components/Grouping";
 import { num, pct, qty } from "@/lib/format";
 
 type Entry = { reasons: string[]; target: number | null; stop: number | null; horizon_days: number | null; confidence: number | null;
@@ -265,8 +264,10 @@ function GroupSummary({ name, rows }: { name: string; rows: Row[] }) {
 
 function JournalPage() {
   const params = useSearchParams();
+  const router = useRouter();
   const q = useApi<View>("/api/journal");
-  const [tab, setTab] = useState<"todo" | "all" | "ideas" | "works">(params.get("tab") === "ideas" ? "ideas" : "todo");
+  const [tab, setTab] = useState<"todo" | "all" | "works">("todo");
+  useEffect(() => { if (params.get("tab") === "ideas") router.replace("/whatif?tab=watch"); }, [params, router]); // moved to What-if
   const [open, setOpen] = useState<string | null>(null);
   const [stock, setStock] = useState<string | null>(params.get("stock"));
   const [busy, setBusy] = useState(false);
@@ -318,7 +319,7 @@ function JournalPage() {
         <h1 className="text-xl font-semibold">Trade journal</h1>
         <div className="flex items-center gap-2">
           <div role="tablist" aria-label="Journal views" className="flex overflow-hidden rounded border border-slate-300 text-sm dark:border-slate-700">
-            {([["todo", `To journal (${inbox.length})`], ["all", "All trades"], ["ideas", "Watch list & ideas"], ["works", "What works"]] as const).map(([k, l]) => (
+            {([["todo", `To journal (${inbox.length})`], ["all", "All trades"], ["works", "What works"]] as const).map(([k, l]) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                 className={`px-2.5 py-1 ${tab === k ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>{l}</button>
             ))}
@@ -376,7 +377,6 @@ function JournalPage() {
               )}
             </Section>
           )}
-          {tab === "ideas" && <Ideas onOpenTrade={(k) => setOpen(k)} />}
           {tab === "works" && <Works tags={d.tags} onOpen={(k) => setOpen(k)} onTags={q.reload} />}
           {d.counts.trades > 0 && (tab === "todo" || tab === "all") && d.rows.every((r) => !r.excursion && !r.since) && (
             <Note tone="slate">No daily prices yet, so the best/worst points and plan checks are empty: add them on <Link className="underline" href="/history">Data ▾ Price history</Link>.</Note>

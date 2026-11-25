@@ -91,8 +91,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   const badge = (href: string) => (href === "/review" && pending > 0 && (
     <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${pending} rows to review`}>{pending}</span>
-  )) || (href === "/journal" && ideasNew > 0 && (
-    <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${ideasNew} idea price levels reached or close`}>{ideasNew}</span>
+  )) || (href === "/whatif" && ideasNew > 0 && (
+    <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${ideasNew} watch list prices reached or close`}>{ideasNew}</span>
   )) || (href === "/maintenance" && updateAvailable && (
     <span className="ml-1 rounded-full bg-emerald-600 px-1.5 text-[10px] font-bold text-white" aria-label="An update is available">new</span>
   ));

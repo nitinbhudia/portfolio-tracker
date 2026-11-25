@@ -7,7 +7,7 @@ import { Loading, Section, btn, btnPrimary, input } from "@/components/ui";
 import { ApiError, apiFetch, jsonInit, notifyStatus, useApi } from "@/lib/api";
 import { num, pct } from "@/lib/format";
 
-import { GroupControls, type GroupOpt, Star, groupRows, useGrouping } from "./grouping";
+import { GroupControls, type GroupOpt, Star, groupRows, useGrouping } from "@/components/Grouping";
 
 type Level = { label: string; kind: "entry" | "target" | "stop" | "alert"; price: number; distance_pct?: number | null };
 type Event = { id: number; label: string; level: number; kind: "near" | "hit"; within_pct: number | null; date: string; price: number; seen: boolean };
@@ -223,8 +223,8 @@ export function Ideas({ onOpenTrade }: { onOpenTrade: (key: string) => void }) {
       <Section title={`Opportunity watch list (${open.length})`} right={editing !== "new" ? <button className={btn} onClick={() => setEditing("new")}>+ New idea</button> : undefined}>
         <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">Write down a trade before you make it: the stock, the price levels that matter (entry, target, stop,
           or any level to watch) and why. After every price refresh the app checks each level and flags it as the price gets closer: <b>within 10%</b>,
-          then <b>within 5%</b> (you can change these per idea), then when the day&apos;s range <b>hits</b> it. New flags show as a badge on Journal. You can also
-          add a price from the Break-even calculator. When you buy, <b>I bought it</b> copies the plan into that buy&apos;s journal entry.</p>
+          then <b>within 5%</b> (you can change these per idea), then when the day&apos;s range <b>hits</b> it. New flags show as a badge on What-if. You can also
+          add a price from the Break-even calculator tab. When you buy, <b>I bought it</b> copies the plan into that buy&apos;s journal entry.</p>
         {editing === "new" && <IdeaForm opts={d} onDone={() => { setEditing(null); q.reload(); }} onCancel={() => setEditing(null)} />}
         <GroupControls opts={IDEA_GROUPS} group={grouping.group} setGroup={grouping.setGroup} starredOnly={grouping.starredOnly} setStarredOnly={grouping.setStarredOnly} />
         {open.length === 0 && editing !== "new" ? <p className="text-sm text-slate-500">{grouping.starredOnly ? "No starred ideas: press ☆ on an idea to star it." : "No ideas yet."}</p>
