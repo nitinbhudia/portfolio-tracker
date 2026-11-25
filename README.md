@@ -119,6 +119,20 @@ The risk of what you hold today:
 Market risk needs daily prices (Data ▾ Price history) and the S&P 500 (vs Indexes). Positions without them are listed
 and left out.
 
+## Break-even calculator (What-if → Break-even calculator, or 🧮 on Positions)
+
+Type any stock, held or not, and the shares and prices you bought at (fees optional), or load one of your positions.
+It shows:
+- **your position:** your break-even (average cost), and, with the price now, your gain or loss and the rise needed to
+  break even;
+- **buying more at a price you choose:** a table of additional shares, extra investment, new average and how much the
+  price must rise. The default rows are 1, half, as many again and double; add your own rows;
+- **reaching a target average:** how many shares it takes to get the average below round levels or your own target;
+- **spending a set amount:** what that amount buys, and the average it gives;
+- **the formula.**
+
+Keep as many stocks as you like; they're saved in the app as you type.
+
 ## Journal (top menu)
 
 One entry per trade:

@@ -218,6 +218,9 @@ def build_tracker(today: date | None = None) -> dict:
         P._invalidate()
         HS._invalidate()
         _journal(db)
+        from app.services import breakeven as BE
+        BE.put(db, [{"id": "demo1", "name": "Example: 6 shares at 883 (made-up)", "currency": "USD", "lots": [{"shares": 6, "price": 883}],
+                     "price": 633.55, "steps": [1, 3, 6, 7, 17], "target": 700}])
         db.merge(m.Setting(key="demo", value={"built_at": datetime.now(timezone.utc).isoformat(), "as_of": end.isoformat()}))
         db.commit()
         n_open = sum(1 for x in lots if not x.sale)

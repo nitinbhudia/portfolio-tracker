@@ -21,6 +21,8 @@ export default function PositionsPage() {
         href={`/research/analysis/ticker/${encodeURIComponent(p.ticker)}`}>{p.ticker} ↗</Link>}
         <Link className="ml-1.5 text-xs" title="Trade journal for this stock" aria-label={`Journal for ${p.stock}`}
           href={`/journal?stock=${encodeURIComponent(p.stock_key)}`}>📝</Link>
+        <Link className="ml-1 text-xs" title="Break-even calculator: what buying more at another price does to your average" aria-label={`Break-even calculator for ${p.stock}`}
+          href={`/whatif?tab=breakeven&pool=${encodeURIComponent(p.pool)}`}>🧮</Link>
         <ResearchActions p={p} watched={watched.has(remembered(p).ticker.toUpperCase())} onChange={() => { q.reload(); wl.reload(); }} /></> },
     { key: "ccy", label: "Ccy", type: "enum", get: (p) => p.currency },
     { key: "shares", label: "Shares", type: "number", align: "right", get: (p) => p.shares, render: (p) => qty(p.shares) },
